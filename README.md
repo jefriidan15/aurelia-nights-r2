@@ -1,56 +1,67 @@
-# Aurelia Nights
+# Aurelia Nights — Port Aurelia
 
-[![Make GTA 6](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
-[![Rank](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/rank.svg)](https://make.fun/bounty/gta6-01)
-[![Reward](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/reward.svg)](https://make.fun/bounty/gta6-01)
+[![gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/c/gta6-01)
+[![rank](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/rank.svg)](https://make.fun/c/gta6-01)
+[![reward](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/reward.svg)](https://make.fun/c/gta6-01)
 
-**Aurelia Nights** is a top-down 2D open-world crime game set in Port Aurelia,
-built for [make.fun's Make GTA 6 bounty](https://make.fun/bounty/gta6-01).
-An original city, story, characters, vehicles and soundtrack — nothing taken
-from any commercial game.
+A top-down 2D open-world crime game set in **Port Aurelia**, a 3600×2600
+sun-soaked harbour city. Built for the make.fun **gta6-01** bounty by
+**golden-condor-22**. Static files only — no build step, no network.
 
-## The game
-
-Rook Vane owes the harbour syndicate fifty grand. The only way to pay it back
-is to run their six jobs: steal a car and deliver it, outrun a three-star
-wanted level, clear the docks in a shootout, hold the bank vault, run a
-four-star checkpoint gauntlet, and survive the five-star lockdown finale.
-
-- **Open world on foot and by car** — a 3600×2600 port city with traffic,
-  pedestrians, a harbour, docks, and a day/night cycle
-- **5-star wanted system** — Port Aurelia PD cruisers hunt you, ram your car,
-  and bust you on foot; hide, repaint at the spray shop, or lay low
-- **Six story missions** with win/lose conditions, plus shops (spray shop,
-  gun shop, diner, safehouse, hospital) and a save system (localStorage)
-- **Combat** — pistol and SMG, armed dock thugs who shoot back
-- **HUD + minimap** — money, health, ammo, wanted stars, clock, mission
-  tracker, and a live minimap with the objective marker
-- **Synthesized sound** — WebAudio engine hum, sirens, gunfire, and a moody
-  bass loop. No audio files, no network.
-
-## Play it
+## Play
 
 ```sh
 node serve.ts
 # open http://localhost:8080
 ```
 
-Or serve `game/` with any static HTTP server and open `index.html`. Static
-files only — no build step, no network requests.
+**On foot:** WASD walk, Shift sprint, E enter / steal a car, mouse aim,
+left click fire (pistol). **Driving:** W accelerate, S brake / reverse,
+A D steer, Space handbrake, E exit. **M** job board, **P** pause,
+**F1** mute.
 
-**Controls:** WASD move/drive · E enter/exit car or use a shop · F steal a
-parked car · mouse + click shoot · Q switch weapon · R reload · P pause ·
-M mute.
+## The city
 
-## Entry
+- Six districts (Old Town, Downtown, Marina, Little Vesper, Midtown,
+  The Docks), a harbour with a working pier, and a full road grid with
+  traffic cars and pedestrians who flee gunfire.
+- A 5-star wanted system: stealing cars, shooting, and ramming police
+  raise the heat; cruisers hunt you harder with every star. Lay low to
+  cool off, or pay $100 at Lola's Spray Shop to wipe it clean.
+- Shops: Spray Shop, Gun Shop (Iron & Oak), Diner (The Golden Gull),
+  Hospital (St. Aurelia General), Safehouse (Rosa's Flat — save here).
+- Day/night cycle, synthesized WebAudio (engine hum, two-tone sirens,
+  gunfire, bass loop), HUD with minimap, localStorage save / continue.
 
-This repository is an entry in make.fun's Make GTA 6 competition (`gta6-01`).
-`main.ts` copies `game/` and `screenshots/` to the output directory and
-writes the dossier with the kit's `vendor/makefun-game.ts`:
+## Six story jobs
 
-```sh
-mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-```
+1. **Grand Theft Aurelia** — steal a car, deliver it to Big Sal's Chop Shop. $400
+2. **Heat Wave** — survive 60 seconds at 3 stars. $600
+3. **Pier 9 Shootout** — clear 6 Vesper guards at the docks, grab the crate. $900
+4. **The Vault Job** — hold the bank vault 20 seconds, escape to the safehouse. $1500
+5. **Four-Star Run** — 3 checkpoints across the city at 4 stars, 150 seconds. $2000
+6. **Lockdown** — survive 90 seconds at 5 stars, reach the north airfield. $3500
+
+Finish all six to become King of Port Aurelia.
+
+## Layout
+
+- `game/index.html`, `game/style.css` — page, HUD, menus
+- `game/src/main.js` — bootstrap, game loop, shops, interactions
+- `game/src/world.js` — city data, buildings, collision
+- `game/src/player.js` — on-foot + driving
+- `game/src/traffic.js` — traffic cars, pedestrians
+- `game/src/police.js` — wanted system, cruiser AI
+- `game/src/combat.js` — bullets, guards
+- `game/src/missions.js` — the six-job state machine
+- `game/src/render.js` — canvas + minimap rendering, day/night
+- `game/src/audio.js` — synthesized WebAudio
+- `game/src/ui.js` — DOM menus and HUD
+- `game/src/input.js` — keyboard / mouse
+- `game/src/save.js` — localStorage save
+- `game/src/util.js` — shared helpers
+- `main.ts` — entry program (copies `game/` + `screenshots/` to `/output`, writes `dossier.json`)
+- `screenshots/` — 4 real in-game screenshots
 
 ## License
 

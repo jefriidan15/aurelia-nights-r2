@@ -1,158 +1,105 @@
-// Combat: bullets, armed dock thugs, muzzle flashes and particles.
-// Thugs are the mission-3 (and vault-hold) enemies; they take cover behind
-// crates and shoot back when the player is in range.
-import { clamp, dist, rand, pick } from './util.js';
+// Combat: bullets, muzzle flashes, enemy guards, and shooting the player.
+import { dist, clamp } from './util.js';
+import { pointInBuilding } from './world.js';
+import { damagePlayer } from './player.js';
+import { playGunshot } from './audio.js';
 
-export class Combat {
-  constructor(world, player, traffic) {
-    this.world = world;
-    this.player = player;
-    this.traffic = traffic;
-    this.bullets = [];   // {x,y,angle,speed,from,damage,life}
-    this.thugs = [];     // {x,y,health,cooldown,angle}
-    this.particles = []; // {x,y,vx,vy,life,maxLife,color,size}
-    this.blood = [];
+export function makeGuard(x, y, hp = 3) {
+  return { x, y, hp, maxHp: hp, angle: 0, shootT: 1 + Math.random() * 2, dead: false, kind: 'guard' };
+}
+
+export function fireBulletFrom(G, x, y, angle, speed, owner) {
+  G.bullets.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, owner, life: 1.1 });
+  G.muzzle = { x, y, t: 0.06 };
+}
+
+// Player shooting: mouse aim, click or hold, consumes ammo.
+export function updatePlayerShooting(G, dt) {
+  const p = G.player;
+  const input = G.input;
+  if (!p.onFoot || !p.hasGun) return;
+  if (p.ammo <= 0) {
+    if (input.mouse.clicked) G.toast('Out of ammo — visit Iron & Oak', '#ff9a3d');
+    return;
   }
-
-  reset() {
-    this.bullets = [];
-    this.thugs = [];
-    this.particles = [];
-    this.blood = [];
+  if (input.mouse.down && p.fireCooldown <= 0) {
+    p.fireCooldown = 0.22;
+    p.ammo--;
+    fireBulletFrom(G, p.x + Math.cos(p.aimAngle) * 20, p.y + Math.sin(p.aimAngle) * 20, p.aimAngle, 900, 'player');
+    playGunshot();
+    G.gunfireTimer = 1.2;
+    if (!G.mission.heatLock) G.addWanted(15, 'gunfire');
   }
+}
 
-  spawnThugs(n, at) {
-    this.thugs = [];
-    for (let i = 0; i < n; i++) {
-      const a = rand(0, Math.PI * 2);
-      const r = rand(60, 150);
-      let x = at.x + Math.cos(a) * r;
-      let y = at.y + Math.sin(a) * r;
-      // Keep them out of the water and out of buildings.
-      if (this.world.isWater(x, y)) { x = at.x - 60; y = at.y - 60; }
-      this.thugs.push({ x, y, health: 70, cooldown: rand(0.5, 1.5), angle: 0 });
-    }
-    return this.thugs.length;
-  }
-
-  playerShoot(tx, ty, sound) {
-    const p = this.player;
-    if (p.dead || p.cooldown > 0) return false;
-    const def = p.weaponDef();
-    const w = p.weapons[p.weapon];
-    if (w && w.ammo <= 0) return false;
-    if (w) w.ammo--;
-    p.cooldown = def.rate;
-    const base = Math.atan2(ty - p.y, tx - p.x);
-    const angle = base + rand(-def.spread, def.spread);
-    this.bullets.push({
-      x: p.x + Math.cos(base) * 22, y: p.y + Math.sin(base) * 22,
-      angle, speed: 900, from: 'player', damage: def.damage, life: def.range / 900,
-    });
-    this._muzzle(p.x + Math.cos(base) * 26, p.y + Math.sin(base) * 26, base);
-    if (sound) sound.gunshot();
-    return true;
-  }
-
-  _muzzle(x, y, angle) {
-    for (let i = 0; i < 6; i++) {
-      const a = angle + rand(-0.5, 0.5);
-      this.particles.push({
-        x, y, vx: Math.cos(a) * rand(120, 320), vy: Math.sin(a) * rand(120, 320),
-        life: 0.18, maxLife: 0.18, color: '#ffcf4d', size: 3,
-      });
-    }
-  }
-
-  _blood(x, y) {
-    for (let i = 0; i < 8; i++) {
-      const a = rand(0, Math.PI * 2);
-      this.particles.push({
-        x, y, vx: Math.cos(a) * rand(40, 160), vy: Math.sin(a) * rand(40, 160),
-        life: 0.5, maxLife: 0.5, color: '#a01818', size: 3,
-      });
-    }
-  }
-
-  _hitWall(x, y) {
-    return !!this.world.collidesCircle(x, y, 2);
-  }
-
-  update(dt, onThugKilled, onPlayerHit, sound) {
-    const p = this.player;
-    // Bullets fly, hit walls, cars, thugs, peds and the player.
-    for (let i = this.bullets.length - 1; i >= 0; i--) {
-      const b = this.bullets[i];
-      b.life -= dt;
-      b.x += Math.cos(b.angle) * b.speed * dt;
-      b.y += Math.sin(b.angle) * b.speed * dt;
-      let dead = b.life <= 0 || this._hitWall(b.x, b.y);
-      if (!dead && b.from === 'player') {
-        for (let t = 0; t < this.thugs.length; t++) {
-          const th = this.thugs[t];
-          if (dist(b.x, b.y, th.x, th.y) < 16) {
-            th.health -= b.damage;
-            this._blood(b.x, b.y);
-            if (th.health <= 0) {
-              this.thugs.splice(t, 1);
-              onThugKilled();
-            }
-            dead = true;
-            break;
-          }
-        }
-        if (!dead) {
-          for (const ped of this.traffic.peds) {
-            if (dist(b.x, b.y, ped.x, ped.y) < 13) {
-              this._blood(b.x, b.y);
-              ped.flee = 4;
-              this.traffic.scarePeds(b.x, b.y, 200);
-              p.addWanted(1);
-              dead = true;
-              break;
-            }
-          }
-        }
-      } else if (!dead && b.from === 'thug') {
-        const pr = p.inCar ? 24 : 13;
-        if (dist(b.x, b.y, p.x, p.y) < pr) {
-          p.hurt(b.damage);
-          onPlayerHit();
-          dead = true;
+export function updateBullets(G, dt) {
+  const p = G.player;
+  for (let i = G.bullets.length - 1; i >= 0; i--) {
+    const b = G.bullets[i];
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+    let dead = b.life <= 0;
+    if (!dead && pointInBuilding(G.buildings, b.x, b.y)) dead = true;
+    if (!dead && b.owner === 'player') {
+      // Hit a guard.
+      for (const g of G.guards) {
+        if (!g.dead && dist(b.x, b.y, g.x, g.y) < 16) {
+          g.hp--; dead = true;
+          if (g.hp <= 0) { g.dead = true; G.onGuardKilled(g); }
+          break;
         }
       }
-      if (dead) this.bullets.splice(i, 1);
-    }
-    // Thugs: strafe toward cover range, shoot when the player is visible.
-    for (const th of this.thugs) {
-      const d = dist(th.x, th.y, p.x, p.y);
-      th.angle = Math.atan2(p.y - th.y, p.x - th.x);
-      th.cooldown -= dt;
-      if (d > 320) {
-        const np = this.world.moveCircle(th.x, th.y, Math.cos(th.angle) * 85 * dt, Math.sin(th.angle) * 85 * dt, 12);
-        th.x = np.x; th.y = np.y;
-      } else if (d < 130) {
-        const np = this.world.moveCircle(th.x, th.y, -Math.cos(th.angle) * 60 * dt, -Math.sin(th.angle) * 60 * dt, 12);
-        th.x = np.x; th.y = np.y;
+      // Hit a cop car.
+      if (!dead) for (const cop of G.cops) {
+        if (dist(b.x, b.y, cop.x, cop.y) < 26) {
+          cop.hp -= 12; dead = true;
+          if (cop.hp <= 0) G.onCopDestroyed(cop);
+          break;
+        }
       }
-      if (d < 380 && th.cooldown <= 0 && !p.dead) {
-        th.cooldown = rand(0.7, 1.4);
-        const a = th.angle + rand(-0.06, 0.06);
-        this.bullets.push({
-          x: th.x + Math.cos(a) * 20, y: th.y + Math.sin(a) * 20,
-          angle: a, speed: 700, from: 'thug', damage: 9, life: 0.8,
-        });
-        this._muzzle(th.x + Math.cos(a) * 22, th.y + Math.sin(a) * 22, a);
-        if (sound) sound.enemyShot();
+      // Hit a traffic car (it becomes a wreck, driver flees).
+      if (!dead) for (const c of G.cars) {
+        if (!c.isCop && c !== p.car && !c.dead && dist(b.x, b.y, c.x, c.y) < 24) {
+          c.hp -= 20; dead = true;
+          if (c.hp <= 0) { c.dead = true; c.traffic = false; }
+          break;
+        }
+      }
+      // Hit a pedestrian (counts as a crime).
+      if (!dead) for (const ped of G.peds) {
+        if (!ped.dead && dist(b.x, b.y, ped.x, ped.y) < 12) {
+          ped.dead = true; dead = true;
+          G.addWanted(30, 'shot a pedestrian');
+          break;
+        }
       }
     }
-    // Particles fade.
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const pt = this.particles[i];
-      pt.life -= dt;
-      pt.x += pt.vx * dt; pt.y += pt.vy * dt;
-      pt.vx *= 0.92; pt.vy *= 0.92;
-      if (pt.life <= 0) this.particles.splice(i, 1);
+    if (!dead && (b.owner === 'cop' || b.owner === 'guard')) {
+      const target = p.onFoot ? p : p.car;
+      const r = p.onFoot ? 13 : 26;
+      if (target && dist(b.x, b.y, target.x, target.y) < r + 6) {
+        dead = true;
+        if (p.onFoot) damagePlayer(G, b.owner === 'guard' ? 9 : 7, 'shot');
+        else { p.car.hp -= 8; if (p.car.hp <= 0) G.carDestroyed(p.car); }
+      }
+    }
+    if (dead) G.bullets.splice(i, 1);
+  }
+}
+
+// Guards stand their post and shoot at the player when close.
+export function updateGuards(G, dt) {
+  const p = G.player;
+  for (const g of G.guards) {
+    if (g.dead) continue;
+    const d = dist(g.x, g.y, p.x, p.y);
+    g.angle = Math.atan2(p.y - g.y, p.x - g.x);
+    if (d < 460) {
+      g.shootT -= dt;
+      if (g.shootT <= 0) {
+        g.shootT = 1.1 + Math.random() * 0.9;
+        fireBulletFrom(G, g.x, g.y, g.angle + (Math.random() - 0.5) * 0.14, 620, 'guard');
+        playGunshot();
+      }
     }
   }
 }

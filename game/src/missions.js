@@ -1,291 +1,231 @@
-// The six-mission story of Aurelia Nights. A pure state machine: it reads the
-// player and the world through `ctx` and reports objectives, progress and
-// completion through callbacks. No DOM, no rendering — unit-testable in Node.
-import { dist } from './util.js';
+// The six story missions of Aurelia Nights. Each mission is a small state
+// machine: stages advance on conditions (position, kills, timers). The module
+// is pure logic over the shared game state G — no DOM, no rendering.
+import { dist, clamp } from './util.js';
+import { LANDMARKS } from './world.js';
+import { makeGuard } from './combat.js';
+import { makeCar } from './player.js';
 
-export const MISSION_DEFS = [
+export const MISSIONS = [
   {
-    title: 'Mission 1 — Hot Wheels',
-    intro: 'Steal a parked car and deliver it to the Spray Shop.',
-    reward: 500,
+    id: 1, name: 'Grand Theft Aurelia', reward: 400, stars: 0,
+    desc: 'Steal any car off the street and deliver it to Big Sal\'s Chop Shop on the east side. Cops hate car thieves.',
   },
   {
-    title: 'Mission 2 — Heat Wave',
-    intro: 'The syndicate wants you hot. Reach 3 stars, then lose the heat completely.',
-    reward: 800,
+    id: 2, name: 'Heat Wave', reward: 600, stars: 3,
+    desc: 'Rosa needs a distraction. Hold 3 stars of heat for 60 seconds and stay free. Don\'t get busted.',
   },
   {
-    title: 'Mission 3 — Dockside Firefight',
-    intro: 'The dock crew crossed the syndicate. Go to the docks and finish it.',
-    reward: 1200,
+    id: 3, name: 'Pier 9 Shootout', reward: 900, stars: 2,
+    desc: 'The Vesper crew guards a crate at the docks. Take out all 6 guards, then grab the crate.',
   },
   {
-    title: 'Mission 4 — Vault Job',
-    intro: 'Hold the bank vault for 20 seconds, then get the cash to the safehouse.',
-    reward: 2500,
+    id: 4, name: 'The Vault Job', reward: 1500, stars: 3,
+    desc: 'Walk into Aurelia National Bank, hold the vault for 20 seconds while the alarm screams, then escape to the safehouse.',
   },
   {
-    title: 'Mission 5 — Checkpoint Run',
-    intro: 'Four stars on your tail. Hit all three checkpoints, then vanish at the safehouse.',
-    reward: 2000,
+    id: 5, name: 'Four-Star Run', reward: 2000, stars: 4,
+    desc: 'Three checkpoints across the city at 4 stars. 150 seconds. No excuses.',
   },
   {
-    title: 'Mission 6 — Aurelia Lockdown',
-    intro: 'Five stars. Survive 90 seconds, then reach Pier 9 and the boat out.',
-    reward: 5000,
+    id: 6, name: 'Lockdown', reward: 3500, stars: 5,
+    desc: 'The whole city locks down. Survive 90 seconds at 5 stars, then reach the north airfield extraction. End it.',
   },
 ];
 
-// Mission 5 checkpoint markers (world coordinates).
-export const CHECKPOINTS = [
-  { x: 540, y: 540, name: 'Checkpoint 1 — North Gate' },
-  { x: 3060, y: 1980, name: 'Checkpoint 2 — East Yard' },
-  { x: 900, y: 1980, name: 'Checkpoint 3 — South Row' },
-];
+export function missionById(id) { return MISSIONS.find(m => m.id === id); }
 
-export function createMissions(ctx) {
-  const engine = {
-    index: 0,          // 0-based mission
-    step: 'intro',     // per-mission step id
-    timer: 0,          // hold / survive countdown
-    cpIndex: 0,        // mission 5 checkpoint progress
-    thugsRemaining: 0,
-    done: false,       // all six complete
-    failed: false,
-    failReason: '',
+export function freshMissionState() {
+  return { id: 0, stage: 0, timer: 0, active: false, marker: null, kills: 0, checkpoints: 0, heatLock: false, data: {} };
+}
 
-    current() {
-      return MISSION_DEFS[this.index];
-    },
+export function startMission(G, id) {
+  const def = missionById(id);
+  if (!def) return false;
+  if (G.mission.active) return false;
+  const M = G.mission;
+  M.id = id; M.stage = 0; M.timer = 0; M.active = true; M.kills = 0; M.checkpoints = 0; M.heatLock = false; M.data = {};
+  const p = G.player;
+  switch (id) {
+    case 1:
+      M.marker = { x: LANDMARKS.chopShop.x + 75, y: LANDMARKS.chopShop.y + 55, label: 'Chop Shop' };
+      G.setObjective(def.name, 'Steal a car (E near any car), then deliver it to the Chop Shop marker.');
+      break;
+    case 2:
+      G.setHeat(70, true); // force 3 stars, locked
+      M.timer = 60;
+      M.marker = null;
+      G.setObjective(def.name, 'Survive 60 seconds at 3 stars. Stay out of their hands.');
+      G.centerMsg('3 STARS — SURVIVE 60 SECONDS', 3);
+      break;
+    case 3: {
+      const d = LANDMARKS.docks;
+      G.guards = [];
+      const spots = [[d.x - 260, d.y - 50], [d.x - 120, d.y - 20], [d.x + 40, d.y - 60], [d.x + 180, d.y - 30], [d.x + 300, d.y - 50], [d.x - 40, d.y - 10]];
+      for (const [x, y] of spots) G.guards.push(makeGuard(x, y, 3));
+      M.marker = { x: d.x, y: d.y, label: 'Pier 9' };
+      G.setObjective(def.name, 'Go to Pier 9 and eliminate all 6 Vesper guards.');
+      break;
+    }
+    case 4:
+      M.marker = { x: LANDMARKS.bank.x + 85, y: LANDMARKS.bank.y + 60, label: 'Bank Vault' };
+      G.setObjective(def.name, 'Get inside the bank vault zone. The alarm will bring the heat.');
+      break;
+    case 5: {
+      M.checkpoints = 0;
+      G.setHeat(90, true);
+      M.timer = 150;
+      M.data.points = [
+        { x: 700, y: 300, label: 'Checkpoint 1 — Old Town' },
+        { x: 3100, y: 650, label: 'Checkpoint 2 — Marina' },
+        { x: 1500, y: 2050, label: 'Checkpoint 3 — The Docks' },
+      ];
+      M.marker = { ...M.data.points[0] };
+      G.setObjective(def.name, 'Hit all 3 checkpoints at 4 stars before the timer runs out.');
+      break;
+    }
+    case 6:
+      G.setHeat(115, true);
+      M.timer = 90;
+      M.marker = null;
+      G.setObjective(def.name, 'LOCKDOWN: survive 90 seconds at 5 stars. Then run for the airfield.');
+      G.centerMsg('5 STARS — LOCKDOWN', 3);
+      break;
+  }
+  G.audio.playPickup();
+  return true;
+}
 
-    start() {
-      this.index = 0;
-      this.done = false;
-      this._beginMission();
-    },
+export function abortMission(G, reason) {
+  const M = G.mission;
+  if (!M.active) return;
+  M.active = false; M.id = 0; M.stage = 0; M.marker = null; M.heatLock = false;
+  G.heat = Math.max(G.heat, 0);
+  G.guards = [];
+  G.setObjective('FREE ROAM', 'Explore Port Aurelia. Press M for missions.');
+  if (reason) G.toast(reason, '#ff9a3d');
+}
 
-    // Begin (or re-begin) the mission at `index` after a failure.
-    _beginMission() {
-      this.failed = false;
-      this.failReason = '';
-      this.timer = 0;
-      this.cpIndex = 0;
-      this.thugsRemaining = 0;
-      const i = this.index;
-      if (i === 0) this.step = 'steal';
-      else if (i === 1) this.step = 'heat';
-      else if (i === 2) this.step = 'goto';
-      else if (i === 3) this.step = 'goto';
-      else if (i === 4) { this.step = 'cp'; ctx.setWanted(4); }
-      else if (i === 5) { this.step = 'survive'; this.timer = 90; ctx.setWanted(5); }
-      ctx.toast(MISSION_DEFS[i].title);
-      ctx.objective(MISSION_DEFS[i].intro);
-    },
+export function completeMission(G) {
+  const M = G.mission;
+  const def = missionById(M.id);
+  if (!def) return;
+  G.player.money += def.reward;
+  G.completed[M.id] = true;
+  G.mission.active = false;
+  G.mission.id = 0; G.mission.stage = 0; G.mission.marker = null; G.mission.heatLock = false;
+  G.guards = [];
+  G.heat = Math.max(0, G.heat - 40);
+  G.audio.playMissionDone();
+  G.centerMsg('JOB DONE  +$' + def.reward.toLocaleString('en-US'), 3.2);
+  G.toast(def.name + ' complete — $' + def.reward.toLocaleString('en-US') + ' paid', '#7dff8a');
+  G.setObjective('FREE ROAM', 'Explore Port Aurelia. Press M for missions.');
+  if (G.completed[1] && G.completed[2] && G.completed[3] && G.completed[4] && G.completed[5] && G.completed[6]) {
+    G.allDone = true;
+    setTimeout(() => G.ui.showWin(), 2600);
+  }
+  G.save();
+}
 
-    retry() {
-      this._beginMission();
-    },
-
-    fail(reason) {
-      if (this.done || this.failed) return;
-      this.failed = true;
-      this.failReason = reason;
-      ctx.onFail(reason);
-    },
-
-    _complete() {
-      const def = MISSION_DEFS[this.index];
-      ctx.player.money += def.reward;
-      ctx.onComplete(this.index, def.reward);
-      this.index++;
-      if (this.index >= MISSION_DEFS.length) {
-        this.done = true;
-        ctx.onWin();
-        return;
-      }
-      this._beginMission();
-    },
-
-    // Called by the game when the player steals a car.
-    onCarStolen() {
-      if (this.index === 0 && this.step === 'steal') {
-        this.step = 'deliver';
-        ctx.objective('Car acquired. Deliver it to the Spray Shop — follow the yellow marker.');
-      }
-    },
-
-    // Called by the game when a mission thug dies.
-    onThugKilled() {
-      if (this.index === 2 && this.step === 'fight') {
-        this.thugsRemaining = Math.max(0, this.thugsRemaining - 1);
-        if (this.thugsRemaining <= 0) this._complete();
-      }
-    },
-
-    objectiveText() {
-      const p = ctx.player;
-      switch (this.index) {
-        case 0:
-          return this.step === 'steal'
-            ? 'Steal a parked car (walk up and press F)'
-            : 'Deliver the car to the Spray Shop';
-        case 1:
-          return this.step === 'heat'
-            ? `Raise your wanted level to 3 stars (now ${p.wanted})`
-            : 'Lose the heat — get to 0 stars. Hide, or reach the safehouse.';
-        case 2:
-          if (this.step === 'goto') return 'Go to the Harbour Docks';
-          return `Eliminate the dock crew — ${this.thugsRemaining} left`;
-        case 3:
-          if (this.step === 'goto') return 'Get to Aurelia National Bank';
-          if (this.step === 'hold') return `Hold the vault — ${Math.ceil(this.timer)}s (stay inside!)`;
-          return 'Cash in hand. Escape to the safehouse.';
-        case 4:
-          if (this.step === 'cp') {
-            const cp = CHECKPOINTS[this.cpIndex];
-            return `${cp.name} (${this.cpIndex}/3 checkpoints)`;
-          }
-          return 'All checkpoints hit. Vanish at the safehouse.';
-        case 5:
-          if (this.step === 'survive') return `Survive the lockdown — ${Math.ceil(this.timer)}s left`;
-          return 'Run for Pier 9. The boat is waiting.';
-        default:
-          return '';
-      }
-    },
-
-    progressText() {
-      if (this.done) return 'All missions complete';
-      return `Mission ${this.index + 1} of 6`;
-    },
-
-    // The world position the yellow marker should point at, or null.
-    marker() {
-      const place = (kind) => ctx.world.placeAt(kind);
-      switch (this.index) {
-        case 0: return this.step === 'deliver' ? place('sprayShop') : null;
-        case 1: return this.step === 'cool' ? place('safehouse') : null;
-        case 2: return place('docks');
-        case 3:
-          if (this.step === 'escape') return place('safehouse');
-          return place('bank');
-        case 4:
-          if (this.step === 'cp') return CHECKPOINTS[this.cpIndex];
-          return place('safehouse');
-        case 5:
-          if (this.step === 'extract') return place('extraction');
-          return null;
-        default: return null;
-      }
-    },
-
-    update(dt) {
-      if (this.done || this.failed) return;
-      const p = ctx.player;
-      const place = (kind) => ctx.world.placeAt(kind);
-      const near = (pt, r) => pt && dist(p.x, p.y, pt.x, pt.y) < r;
-
-      switch (this.index) {
-        case 0: {
-          if (this.step === 'deliver' && near(place('sprayShop'), 100)) {
-            if (p.inCar) {
-              // Hand the car over: it leaves the player's hands.
-              ctx.deliverCar();
-            }
-            this._complete();
-          }
-          break;
+// Called every frame while a mission is active.
+export function updateMission(G, dt) {
+  const M = G.mission;
+  if (!M.active) return;
+  const p = G.player;
+  switch (M.id) {
+    case 1: {
+      if (M.stage === 0) {
+        if (!p.onFoot && p.car && p.car.stolen) {
+          M.stage = 1;
+          G.setObjective('Grand Theft Aurelia', 'Car stolen. Deliver it to the Chop Shop marker, east side.');
         }
-        case 1: {
-          if (this.step === 'heat' && p.wanted >= 3) {
-            this.step = 'cool';
-            ctx.objective('Three stars! Now lose them all — stay unseen, or hide at the safehouse.');
-          } else if (this.step === 'cool' && p.wanted === 0) {
-            this._complete();
-          }
-          break;
+      } else if (M.stage === 1) {
+        if (!p.onFoot && p.car && dist(p.x, p.y, M.marker.x, M.marker.y) < 130) {
+          const delivered = p.car;
+          delivered.owned = false;
+          // The chop shop takes the car.
+          const idx = G.cars.indexOf(delivered);
+          if (idx >= 0) G.cars.splice(idx, 1);
+          p.car = null; p.onFoot = true;
+          p.x = M.marker.x; p.y = M.marker.y + 90;
+          completeMission(G);
         }
-        case 2: {
-          if (this.step === 'goto' && near(place('docks'), 170)) {
-            this.step = 'fight';
-            this.thugsRemaining = ctx.spawnThugs(6, place('docks'));
-            ctx.objective('Six of them. Drop them all.');
-          }
-          break;
-        }
-        case 3: {
-          const bank = place('bank');
-          if (this.step === 'goto' && near(bank, 130)) {
-            this.step = 'hold';
-            this.timer = 20;
-            ctx.setWanted(Math.max(p.wanted, 3));
-            ctx.objective('Vault drill running — hold the room for 20 seconds!');
-          } else if (this.step === 'hold') {
-            if (near(bank, 150)) {
-              this.timer -= dt;
-              ctx.setWanted(Math.max(p.wanted, 3));
-              if (this.timer <= 0) {
-                this.step = 'escape';
-                ctx.objective('Vault cracked! Get the cash to the safehouse.');
-              }
-            }
-          } else if (this.step === 'escape' && near(place('safehouse'), 110)) {
-            this._complete();
-          }
-          break;
-        }
-        case 4: {
-          if (this.step === 'cp') {
-            const cp = CHECKPOINTS[this.cpIndex];
-            if (near(cp, 95)) {
-              this.cpIndex++;
-              ctx.cashBlip();
-              if (this.cpIndex >= CHECKPOINTS.length) {
-                this.step = 'escape';
-                ctx.objective('All checkpoints hit. Vanish at the safehouse.');
-              }
-            }
-          } else if (this.step === 'escape' && near(place('safehouse'), 110)) {
-            this._complete();
-          }
-          break;
-        }
-        case 5: {
-          // Lockdown: the heat never drops below five stars.
-          ctx.setWanted(5);
-          if (this.step === 'survive') {
-            this.timer -= dt;
-            if (this.timer <= 0) {
-              this.step = 'extract';
-              ctx.objective('You outlasted them. Now run — Pier 9, the boat out.');
-            }
-          } else if (this.step === 'extract' && near(place('extraction'), 120)) {
-            this._complete();
-          }
-          break;
-        }
-        default:
-          break;
       }
-    },
-
-    saveState() {
-      return { index: this.index, step: this.step, timer: this.timer, cpIndex: this.cpIndex, done: this.done };
-    },
-
-    loadState(s) {
-      if (!s) return;
-      this.index = Math.min(s.index || 0, MISSION_DEFS.length - 1);
-      this.done = !!s.done;
-      this.timer = s.timer || 0;
-      this.cpIndex = s.cpIndex || 0;
-      this.step = s.step || 'intro';
-      this.failed = false;
-      if (this.done) return;
-      // Re-assert mission-start side effects that a load must restore.
-      if (this.index === 4 && this.step === 'cp') ctx.setWanted(4);
-      if (this.index === 5) ctx.setWanted(5);
-    },
-  };
-  return engine;
+      break;
+    }
+    case 2: {
+      M.timer -= dt;
+      G.setObjective('Heat Wave', 'Survive at 3 stars — ' + Math.ceil(M.timer) + 's left. Stay free!');
+      if (M.timer <= 0) completeMission(G);
+      break;
+    }
+    case 3: {
+      if (M.stage === 0) {
+        const left = G.guards.filter(g => !g.dead).length;
+        G.setObjective('Pier 9 Shootout', 'Eliminate the Vesper guards — ' + left + ' left.');
+        if (left === 0) {
+          M.stage = 1;
+          M.marker = { x: LANDMARKS.docks.x + 320, y: LANDMARKS.docks.y - 40, label: 'The Crate' };
+          G.setObjective('Pier 9 Shootout', 'All guards down. Grab the crate at the far end of the pier.');
+        }
+      } else if (M.stage === 1) {
+        if (p.onFoot && dist(p.x, p.y, M.marker.x, M.marker.y) < 46) completeMission(G);
+      }
+      break;
+    }
+    case 4: {
+      if (M.stage === 0) {
+        const v = LANDMARKS.vault;
+        if (p.onFoot && p.x > v.x && p.x < v.x + v.w && p.y > v.y && p.y < v.y + v.h) {
+          M.stage = 1; M.timer = 20;
+          G.setHeat(70, true);
+          G.setObjective('The Vault Job', 'HOLD THE VAULT — ' + Math.ceil(M.timer) + 's. The alarm is screaming.');
+          G.centerMsg('VAULT ALARM — HOLD 20 SECONDS', 2.5);
+        }
+      } else if (M.stage === 1) {
+        M.timer -= dt;
+        const v = LANDMARKS.vault;
+        const inside = p.onFoot && p.x > v.x && p.x < v.x + v.w && p.y > v.y && p.y < v.y + v.h;
+        G.setObjective('The Vault Job', 'HOLD THE VAULT — ' + Math.ceil(Math.max(0, M.timer)) + 's' + (inside ? '' : ' (GET BACK INSIDE!)'));
+        if (!inside) M.timer += dt * 0.5; // the hold stalls if you leave
+        if (M.timer <= 0) {
+          M.stage = 2;
+          M.marker = { x: LANDMARKS.playerSpawn.x, y: LANDMARKS.playerSpawn.y, label: 'Safehouse' };
+          G.setObjective('The Vault Job', 'Vault cracked! Escape to the safehouse — Rosa\'s Flat.');
+        }
+      } else if (M.stage === 2) {
+        if (dist(p.x, p.y, M.marker.x, M.marker.y) < 80) completeMission(G);
+      }
+      break;
+    }
+    case 5: {
+      M.timer -= dt;
+      const left = Math.max(0, Math.ceil(M.timer));
+      G.setObjective('Four-Star Run', 'Checkpoint ' + (M.checkpoints + 1) + ' of 3 — ' + left + 's left.');
+      if (M.timer <= 0) { abortMission(G, 'Time\'s up — the run failed. Try again from the job board.'); return; }
+      if (M.marker && dist(p.x, p.y, M.marker.x, M.marker.y) < 110) {
+        M.checkpoints++;
+        G.audio.playPickup();
+        if (M.checkpoints >= 3) { completeMission(G); return; }
+        M.marker = { ...M.data.points[M.checkpoints] };
+        G.toast('Checkpoint ' + M.checkpoints + ' of 3!', '#7dff8a');
+      }
+      break;
+    }
+    case 6: {
+      if (M.stage === 0) {
+        M.timer -= dt;
+        G.setObjective('Lockdown', 'Survive the lockdown — ' + Math.ceil(Math.max(0, M.timer)) + 's at 5 stars.');
+        if (M.timer <= 0) {
+          M.stage = 1;
+          M.marker = { x: LANDMARKS.extraction.x + 60, y: LANDMARKS.extraction.y + 60, label: 'Extraction' };
+          G.setObjective('Lockdown', 'You survived! Get to the north airfield extraction — NOW.');
+          G.centerMsg('EXTRACTION OPEN — GO NORTH', 3);
+        }
+      } else if (M.stage === 1) {
+        if (dist(p.x, p.y, M.marker.x, M.marker.y) < 90) completeMission(G);
+      }
+      break;
+    }
+  }
 }

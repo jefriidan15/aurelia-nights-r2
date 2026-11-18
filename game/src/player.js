@@ -1,164 +1,153 @@
-// The player: Rook Vane, on foot and behind the wheel. Arcade car physics,
-// on-foot movement, health, money, weapons and the steal/enter interactions.
-import { clamp, dist, angleDiff, TAU } from './util.js';
+// The player: on-foot movement, car entry / theft, driving physics, health.
+import { clamp, dist, angleDiff, rand, pick } from './util.js';
+import { WORLD_W, WORLD_H, isOnRoad, isWater, collideBuildings } from './world.js';
+import { playCrash } from './audio.js';
 
-export const WEAPONS = {
-  fists: { name: 'Fists', damage: 12, rate: 0.45, range: 46, spread: 0, auto: false, ammo: Infinity },
-  pistol: { name: 'Pistol', damage: 34, rate: 0.32, range: 420, spread: 0.03, auto: false, ammo: 12, mag: 12 },
-  smg: { name: 'SMG', damage: 18, rate: 0.09, range: 360, spread: 0.09, auto: true, ammo: 30, mag: 30 },
-};
+export const CAR_COLORS = ['#d23b3b', '#3b7dd2', '#d2a93b', '#3bd2a0', '#8a3bd2', '#d2d2d2', '#2b2b2b', '#e07b39'];
+export const CAR_NAMES = ['Vesper', 'Comet', 'Stallion', 'Bison', 'Falcon', 'Courier', 'Sultan', 'Dune'];
 
-export class Player {
-  constructor(world) {
-    this.world = world;
-    this.reset();
-  }
+export function makeCar(x, y, angle, opts = {}) {
+  return {
+    kind: 'car',
+    x, y, angle, speed: 0,
+    color: opts.color || pick(CAR_COLORS),
+    name: opts.name || pick(CAR_NAMES),
+    len: 46, wid: 22,
+    stolen: !!opts.stolen,
+    traffic: !!opts.traffic,
+    hp: 100,
+    dead: false,
+  };
+}
 
-  reset() {
-    const s = this.world.placeAt('start');
-    this.x = s.x; this.y = s.y;
-    this.angle = -Math.PI / 2;
-    this.speed = 0;
-    this.health = 100;
-    this.money = 250;
-    this.wanted = 0;
-    this.inCar = null;      // the Car object when driving
-    this.weapon = 'fists';
-    this.weapons = { fists: { ammo: Infinity }, pistol: null, smg: null };
-    this.cooldown = 0;
-    this.hurtFlash = 0;
-    this.bustedTimer = 0;
-    this.dead = false;
-  }
+export function makePlayer(x, y) {
+  return {
+    x, y, angle: -Math.PI / 2, speed: 0,
+    onFoot: true, car: null,
+    health: 100, money: 250,
+    hasGun: false, ammo: 0,
+    aimAngle: -Math.PI / 2,
+    fireCooldown: 0,
+    invuln: 0,
+    moving: false,
+  };
+}
 
-  get armed() {
-    return this.weapon !== 'fists';
-  }
+// Spawn a parked car on a road near a point (used for theft targets).
+export function spawnParkedCar(buildings, x, y) {
+  const angle = Math.random() < 0.5 ? 0 : Math.PI / 2;
+  const car = makeCar(x, y, angle + (Math.random() < 0.5 ? 0 : Math.PI));
+  return car;
+}
 
-  weaponDef() {
-    return WEAPONS[this.weapon];
-  }
+export function updatePlayer(G, dt) {
+  const p = G.player;
+  const input = G.input;
+  p.fireCooldown = Math.max(0, p.fireCooldown - dt);
+  p.invuln = Math.max(0, p.invuln - dt);
+  p.moving = false;
 
-  buyWeapon(kind) {
-    const price = kind === 'pistol' ? 150 : 400;
-    if (this.money < price) return { ok: false, reason: 'Not enough cash.' };
-    if (this.weapons[kind]) return { ok: false, reason: 'You already own that.' };
-    this.money -= price;
-    this.weapons[kind] = { ammo: WEAPONS[kind].mag };
-    this.weapon = kind;
-    return { ok: true, reason: `${WEAPONS[kind].name} bought. Press Q to switch.` };
-  }
-
-  buyAmmo() {
-    if (!this.weapons[this.weapon] || this.weapon === 'fists') return { ok: false, reason: 'No gun equipped.' };
-    if (this.money < 40) return { ok: false, reason: 'Not enough cash.' };
-    this.money -= 40;
-    this.weapons[this.weapon].ammo += WEAPONS[this.weapon].mag;
-    return { ok: true, reason: 'Ammo restocked.' };
-  }
-
-  cycleWeapon() {
-    const owned = ['fists', 'pistol', 'smg'].filter((w) => this.weapons[w]);
-    const i = owned.indexOf(this.weapon);
-    this.weapon = owned[(i + 1) % owned.length];
-    return WEAPONS[this.weapon].name;
-  }
-
-  reload() {
-    const w = this.weapons[this.weapon];
-    if (!w || this.weapon === 'fists') return;
-    w.ammo = WEAPONS[this.weapon].mag;
-  }
-
-  hurt(amount) {
-    if (this.dead) return;
-    this.health = Math.max(0, this.health - amount);
-    this.hurtFlash = 0.35;
-    if (this.health <= 0) this.dead = true;
-  }
-
-  heal(amount) {
-    this.health = Math.min(100, this.health + amount);
-  }
-
-  addWanted(n) {
-    this.wanted = clamp(this.wanted + n, 0, 5);
-  }
-
-  update(dt, input, cars) {
-    if (this.dead) return;
-    this.cooldown = Math.max(0, this.cooldown - dt);
-    this.hurtFlash = Math.max(0, this.hurtFlash - dt);
-
-    if (this.inCar) {
-      this._drive(dt, input);
-    } else {
-      this._walk(dt, input);
+  if (p.onFoot) {
+    let mx = (input.keys.right ? 1 : 0) - (input.keys.left ? 1 : 0);
+    let my = (input.keys.down ? 1 : 0) - (input.keys.up ? 1 : 0);
+    if (mx || my) {
+      const len = Math.hypot(mx, my); mx /= len; my /= len;
+      const spd = input.keys.run ? 265 : 165;
+      p.x += mx * spd * dt; p.y += my * spd * dt;
+      p.angle = Math.atan2(my, mx);
+      p.moving = true;
     }
-  }
-
-  _walk(dt, input) {
-    const v = input.moveVector();
-    const speed = 175;
-    const len = Math.hypot(v.x, v.y);
-    if (len > 0) {
-      const nx = (v.x / len) * speed * dt;
-      const ny = (v.y / len) * speed * dt;
-      const p = this.world.moveCircle(this.x, this.y, nx, ny, 14);
-      this.x = p.x; this.y = p.y;
-      this.angle = Math.atan2(v.y, v.x);
-    }
-  }
-
-  _drive(dt, input) {
-    const car = this.inCar;
-    const v = input.moveVector();
-    const forward = v.y < 0 ? 1 : v.y > 0 ? -0.55 : 0;
-    const steer = v.x;
-    // Arcade handling: speed builds with throttle, steering scales with speed.
-    const topSpeed = car.topSpeed;
-    car.speed += forward * 620 * dt;
-    car.speed -= car.speed * 0.9 * dt; // drag + rolling resistance
-    if (forward === 0) car.speed -= Math.sign(car.speed) * 90 * dt;
-    if (Math.abs(car.speed) < 4 && forward === 0) car.speed = 0;
-    car.speed = clamp(car.speed, -topSpeed * 0.45, topSpeed);
-    const turnRate = 2.4 * clamp(Math.abs(car.speed) / 120, 0, 1) * Math.sign(car.speed || 1);
-    car.angle += steer * turnRate * dt;
-    const dx = Math.cos(car.angle) * car.speed * dt;
-    const dy = Math.sin(car.angle) * car.speed * dt;
-    const p = this.world.moveCircle(car.x, car.y, dx, dy, 16);
-    const hitWall = (p.x === car.x && dx !== 0) || (p.y === car.y && dy !== 0);
-    if (hitWall) {
+    p.x = clamp(p.x, 20, WORLD_W - 20);
+    p.y = clamp(p.y, 20, WORLD_H - 20);
+    if (isWater(p.x, p.y)) p.y = 2440;
+    collideBuildings(G.buildings, p, 13);
+    // Aim follows the mouse.
+    const cam = G.camera;
+    const wx = cam.x + (input.mouse.x - G.view.w / 2) / cam.zoom;
+    const wy = cam.y + (input.mouse.y - G.view.h / 2) / cam.zoom;
+    p.aimAngle = Math.atan2(wy - p.y, wx - p.x);
+  } else if (p.car) {
+    const car = p.car;
+    const topSpeed = isOnRoad(car.x, car.y) ? 560 : 300;
+    if (input.keys.up) car.speed += 620 * dt;
+    if (input.keys.down) car.speed -= 700 * dt;
+    if (!input.keys.up && !input.keys.down) car.speed -= Math.sign(car.speed) * 240 * dt;
+    if (input.keys.brake) car.speed -= Math.sign(car.speed) * 900 * dt;
+    car.speed = clamp(car.speed, -190, topSpeed);
+    if (Math.abs(car.speed) < 6 && !input.keys.up && !input.keys.down) car.speed = 0;
+    const steer = (input.keys.left ? -1 : 0) + (input.keys.right ? 1 : 0);
+    const dir = car.speed >= 0 ? 1 : -1;
+    car.angle += steer * 2.35 * dt * dir * clamp(Math.abs(car.speed) / 120, 0, 1);
+    const nx = car.x + Math.cos(car.angle) * car.speed * dt;
+    const ny = car.y + Math.sin(car.angle) * car.speed * dt;
+    car.x = clamp(nx, 24, WORLD_W - 24);
+    car.y = clamp(ny, 24, WORLD_H - 24);
+    if (isWater(car.x, car.y)) { car.y = 2440; car.speed *= 0.4; }
+    const before = { x: car.x, y: car.y };
+    if (collideBuildings(G.buildings, car, 24)) {
+      if (Math.abs(car.speed) > 240) playCrash();
       car.speed *= 0.35;
-      if (Math.abs(car.speed) > 240) { this.hurt(4); car.health -= 6; }
     }
-    car.x = p.x; car.y = p.y;
-    this.x = car.x; this.y = car.y;
-    this.angle = car.angle;
-    this.speed = car.speed;
+    // Nudge other cars.
+    for (const other of G.cars) {
+      if (other === car || other.dead) continue;
+      const d = dist(car.x, car.y, other.x, other.y);
+      if (d < 48 && d > 0.01) {
+        const push = (48 - d) / 2;
+        const ux = (other.x - car.x) / d, uy = (other.y - car.y) / d;
+        other.x += ux * push; other.y += uy * push;
+        car.x -= ux * push * 0.5; car.y -= uy * push * 0.5;
+        if (Math.abs(car.speed) > 200) { playCrash(); car.speed *= 0.6; }
+        void before;
+      }
+    }
+    p.x = car.x; p.y = car.y; p.angle = car.angle; p.speed = car.speed;
+    p.moving = Math.abs(car.speed) > 10;
   }
+}
 
-  // Step out of the car to the side.
-  exitCar() {
-    if (!this.inCar) return;
-    const car = this.inCar;
-    car.driver = null;
-    car.speed = 0;
-    this.inCar = null;
-    const side = car.angle + Math.PI / 2;
-    const p = this.world.moveCircle(car.x, car.y, Math.cos(side) * 26, Math.sin(side) * 26, 14);
-    this.x = p.x; this.y = p.y;
-    this.speed = 0;
+export function enterCar(G, car) {
+  const p = G.player;
+  p.onFoot = false; p.car = car;
+  car.traffic = false;
+  if (!car.stolen && !car.owned) {
+    car.stolen = true;
+    G.addWanted(20, 'stole a car'); // 20 heat = 1 star
+    G.toast('Car stolen! +1 star', '#ff9a3d');
   }
+  G.audio.playPickup();
+}
 
-  enterCar(car) {
-    this.inCar = car;
-    car.driver = 'player';
-    this.x = car.x; this.y = car.y;
-  }
+export function exitCar(G) {
+  const p = G.player;
+  if (!p.car) return;
+  const car = p.car;
+  p.onFoot = true;
+  p.x = car.x + Math.cos(car.angle + Math.PI / 2) * 34;
+  p.y = car.y + Math.sin(car.angle + Math.PI / 2) * 34;
+  p.x = clamp(p.x, 20, WORLD_W - 20);
+  p.y = clamp(p.y, 20, WORLD_H - 20);
+  p.car = null;
+}
 
-  // Can the player reach this car to enter / steal it?
-  nearCar(car, range = 46) {
-    return dist(this.x, this.y, car.x, car.y) < range;
+export function damagePlayer(G, amount, cause) {
+  const p = G.player;
+  if (p.invuln > 0 || G.state !== 'playing') return;
+  p.health -= amount;
+  p.invuln = 0.35;
+  if (p.health <= 0) {
+    p.health = 0;
+    G.busted(cause || 'wasted');
   }
+}
+
+// Find the nearest enterable car within reach of the player.
+export function nearestCar(G, range) {
+  let best = null, bd = range;
+  for (const c of G.cars) {
+    if (c.dead) continue;
+    const d = dist(G.player.x, G.player.y, c.x, c.y);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
 }

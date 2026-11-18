@@ -1,46 +1,51 @@
-// Save / load through localStorage. One slot, versioned, plain JSON.
+// localStorage save / load. One slot, versioned, plain JSON.
 export const SAVE_KEY = 'aurelia-nights-save-v1';
 
-export function writeSave(game) {
+export function saveGame(G) {
   try {
-    const p = game.player;
+    const p = G.player;
     const data = {
       v: 1,
       savedAt: Date.now(),
-      money: Math.floor(p.money),
-      health: Math.floor(p.health),
-      x: Math.round(p.x),
-      y: Math.round(p.y),
-      wanted: p.wanted,
-      weapon: p.weapon,
-      weapons: p.weapons,
-      timeOfDay: game.timeOfDay,
-      missions: game.missions.saveState(),
-      stats: game.stats,
+      money: p.money,
+      health: p.health,
+      hasGun: p.hasGun,
+      ammo: p.ammo,
+      x: p.x, y: p.y,
+      wanted: G.wanted,
+      heat: G.heat,
+      clock: G.clock,
+      completed: G.completed,
+      playSeconds: Math.round(G.time),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, reason: String(err && err.message ? err.message : err) };
-  }
+    return true;
+  } catch (e) { return false; }
 }
 
-export function readSave() {
+export function loadSave() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw);
-    if (!data || data.v !== 1) return null;
-    return data;
-  } catch {
-    return null;
-  }
+    const d = JSON.parse(raw);
+    if (!d || d.v !== 1) return null;
+    return d;
+  } catch (e) { return null; }
 }
 
-export function hasSave() {
-  return readSave() !== null;
+export function applySave(G, d) {
+  const p = G.player;
+  p.money = d.money ?? 250;
+  p.health = d.health ?? 100;
+  p.hasGun = !!d.hasGun;
+  p.ammo = d.ammo ?? 0;
+  p.x = d.x ?? 700; p.y = d.y ?? 1000;
+  p.onFoot = true; p.car = null;
+  G.wanted = d.wanted ?? 0;
+  G.heat = d.heat ?? 0;
+  G.clock = d.clock ?? 8 * 3600;
+  G.completed = d.completed || {};
+  G.time = d.playSeconds ?? 0;
 }
 
-export function clearSave() {
-  try { localStorage.removeItem(SAVE_KEY); } catch { /* storage unavailable */ }
-}
+export function hasSave() { return loadSave() !== null; }

@@ -8,87 +8,84 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="stage">
-  <canvas id="game" width="1280" height="800"></canvas>
+<div id="game-root">
+  <canvas id="game" width="1280" height="720"></canvas>
+  <canvas id="minimap" width="220" height="160"></canvas>
 
   <div id="hud" class="hidden">
     <div id="hud-top-left">
-      <div id="money">$<span id="money-val">250</span></div>
-      <div id="health-bar"><div id="health-fill"></div><span id="health-text">100</span></div>
+      <div id="stars"></div>
+      <div id="money">$0</div>
+      <div id="health-wrap"><div id="health-bar"></div><span id="health-text">100</span></div>
       <div id="ammo"></div>
     </div>
-    <div id="hud-top-right">
-      <div id="wanted"></div>
-      <div id="clock">08:00</div>
-    </div>
-    <div id="mission-box">
-      <div id="mission-title"></div>
-      <div id="mission-objective"></div>
-      <div id="mission-progress"></div>
-    </div>
+    <div id="objective-box"><div id="objective-title">FREE ROAM</div><div id="objective-text">Explore Port Aurelia. Press M for missions.</div></div>
+    <div id="clock-box"><span id="clock">08:00</span><span id="speed">0 mph</span></div>
     <div id="toast"></div>
-    <div id="hint"></div>
-    <canvas id="minimap" width="200" height="150"></canvas>
-    <div id="controls-hint">WASD move &middot; E enter/exit car &middot; F steal car &middot; Click shoot &middot; Q weapon &middot; P pause &middot; M mute</div>
+    <div id="prompt"></div>
+    <div id="center-msg"></div>
   </div>
 
-  <div id="title-screen" class="overlay">
-    <div class="panel">
-      <h1>AURELIA <span>NIGHTS</span></h1>
-      <p class="tagline">Port Aurelia. One driver. Six jobs. No way out but through.</p>
-      <p class="story">Rook Vane owes the harbour syndicate fifty grand. The only way to pay it
-      back is to run their jobs — steal, dodge the Port Aurelia PD, and stay alive
-      until the last checkpoint falls.</p>
-      <div class="menu-buttons">
+  <div id="title-screen" class="screen">
+    <div class="title-inner">
+      <div class="title-kicker">PORT AURELIA &middot; 3600 &times; 2600</div>
+      <h1>AURELIA<br>NIGHTS</h1>
+      <p class="tagline">Six jobs. Five stars. One city that never sleeps.</p>
+      <div class="title-buttons">
         <button id="btn-new">NEW GAME</button>
-        <button id="btn-continue" class="hidden">CONTINUE</button>
+        <button id="btn-continue">CONTINUE</button>
         <button id="btn-how">HOW TO PLAY</button>
       </div>
-      <p class="foot">Aurelia Nights &middot; an original open-world crime game &middot; keyboard + mouse &middot; sound on for the full cut</p>
+      <div id="save-info"></div>
+      <p class="foot">WASD move / drive &middot; E enter &amp; steal car &middot; Mouse aim, Click shoot &middot; M missions &middot; P pause &middot; F1 mute</p>
     </div>
   </div>
 
-  <div id="how-screen" class="overlay hidden">
+  <div id="how-screen" class="screen hidden">
     <div class="panel">
       <h2>HOW TO PLAY</h2>
-      <table class="keys">
-        <tr><td>W A S D / arrows</td><td>Move on foot / drive</td></tr>
-        <tr><td>Mouse + click</td><td>Aim and shoot (when armed)</td></tr>
-        <tr><td>E</td><td>Enter / exit a car</td></tr>
-        <tr><td>F</td><td>Steal a parked car (raises wanted)</td></tr>
-        <tr><td>Q</td><td>Switch weapon</td></tr>
-        <tr><td>R</td><td>Reload</td></tr>
-        <tr><td>P / Esc</td><td>Pause</td></tr>
-        <tr><td>M</td><td>Mute sound</td></tr>
-      </table>
-      <p>Follow the yellow marker. Finish all six missions to win. Getting wasted
-      sends you to St. Marrow Hospital ($200). Getting busted by the PD fails the
-      mission. Spray shops repaint your car and clear your heat — for a price.
-      The diner heals you. The safehouse saves your game and cools your wanted level.</p>
+      <p><b>On foot:</b> WASD walk, Shift sprint, E enter a car, Space jump a fence (no-op), Mouse aim, Left click fire (pistol).</p>
+      <p><b>Driving:</b> W accelerate, S brake / reverse, A D steer, Space handbrake, E exit the car.</p>
+      <p><b>Crime:</b> stealing a car, shooting, or ramming police raises your wanted level (1&ndash;5 stars). Cops hunt you harder with every star. Lay low to cool off, or pay $100 at a Spray Shop to wipe it clean.</p>
+      <p><b>Shops:</b> stand by a shop door and press E &mdash; Spray Shop clears wanted, Gun Shop sells guns &amp; ammo, Diner heals, Hospital fully heals, Safehouse saves the game.</p>
+      <p><b>Missions:</b> press M, pick a job, follow the yellow marker. Finish all six to own the night.</p>
       <button id="btn-how-back">BACK</button>
     </div>
   </div>
 
-  <div id="pause-screen" class="overlay hidden">
+  <div id="mission-screen" class="screen hidden">
+    <div class="panel">
+      <h2>JOB BOARD &mdash; PORT AURELIA</h2>
+      <div id="mission-list"></div>
+      <button id="btn-mission-close">CLOSE [M]</button>
+    </div>
+  </div>
+
+  <div id="pause-screen" class="screen hidden">
     <div class="panel">
       <h2>PAUSED</h2>
-      <div class="menu-buttons">
+      <div class="title-buttons">
         <button id="btn-resume">RESUME</button>
         <button id="btn-save">SAVE GAME</button>
         <button id="btn-quit">QUIT TO TITLE</button>
       </div>
-      <p id="save-status"></p>
+      <p id="pause-save-msg"></p>
     </div>
   </div>
 
-  <div id="end-screen" class="overlay hidden">
+  <div id="end-screen" class="screen hidden">
     <div class="panel">
-      <h2 id="end-title"></h2>
+      <h2 id="end-title">BUSTED</h2>
       <p id="end-text"></p>
-      <div class="menu-buttons">
-        <button id="btn-again">PLAY AGAIN</button>
-        <button id="btn-end-title">TITLE SCREEN</button>
-      </div>
+      <button id="btn-end-respawn">RESPAWN AT HOSPITAL</button>
+    </div>
+  </div>
+
+  <div id="win-screen" class="screen hidden">
+    <div class="panel">
+      <h2>KING OF PORT AURELIA</h2>
+      <p>All six jobs done. The city is yours, Aurelia. Free roam continues &mdash; the night is still young.</p>
+      <button id="btn-win-close">KEEP PLAYING</button>
     </div>
   </div>
 </div>
