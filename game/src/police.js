@@ -1,25 +1,30 @@
 // The 5-star wanted system and police cruiser AI. Heat rises with crime and
-// cools when the player behaves; cops scale in count, speed and aggression.
-import { clamp, dist, angleDiff, rand, pick } from './util.js';
+// cools when the player behaves; cruisers scale in count, speed and
+// aggression with every star, and shoot at the player from 3 stars up.
+import { clamp, dist, angleDiff, rand } from './util.js';
 import { WORLD_W, WORLD_H, AVENUES, STREETS } from './world.js';
-import { makeCar } from './player.js';
-import { damagePlayer } from './player.js';
+import { makeCar, damagePlayer } from './player.js';
 
 // Heat thresholds for each star.
 export const STAR_HEAT = [0, 20, 45, 70, 90, 115];
+
 export function wantedFromHeat(heat) {
   let w = 0;
   for (let i = 1; i <= 5; i++) if (heat >= STAR_HEAT[i]) w = i;
   return w;
 }
-export function copsForStars(stars) { return [0, 2, 3, 5, 7, 10][stars]; }
+
+export function copsForStars(stars) {
+  return [0, 2, 3, 5, 7, 10][stars];
+}
 
 export function makeCop(x, y) {
   const car = makeCar(x, y, 0, { color: '#1c1c22', name: 'Interceptor' });
   car.traffic = false;
   car.isCop = true;
   car.hp = 120;
-  car.onFoot = false;
+  car.maxHp = 120;
+  car.givingUp = false;
   return car;
 }
 
@@ -30,13 +35,19 @@ export function spawnCop(G) {
   const r = rand(700, 900);
   let x = clamp(p.x + Math.cos(angle) * r, 120, WORLD_W - 120);
   let y = clamp(p.y + Math.sin(angle) * r, 120, WORLD_H - 120);
-  // Snap to the nearest road.
-  let best = null, bd = Infinity;
-  for (const a of AVENUES) for (const s of STREETS) {
-    const d = Math.hypot(a - x, s - y);
-    if (d < bd) { bd = d; best = { x: a, y: s }; }
+  // Snap to the nearest intersection when one is close.
+  let best = null;
+  let bd = Infinity;
+  for (const a of AVENUES) {
+    for (const s of STREETS) {
+      const d = Math.hypot(a - x, s - y);
+      if (d < bd) { bd = d; best = { x: a, y: s }; }
+    }
   }
-  if (best && bd < 320) { x = best.x; y = best.y; }
+  if (best && bd < 320) {
+    x = best.x;
+    y = best.y;
+  }
   const cop = makeCop(x, y);
   cop.angle = Math.atan2(p.y - y, p.x - x);
   cop.speed = 120;
@@ -72,7 +83,7 @@ export function updatePolice(G, dt) {
       }
       continue;
     }
-    // Pursuit: steer toward the player, faster and more reckless at higher stars.
+    // Pursuit: steer toward the player, faster and more reckless per star.
     const desired = Math.atan2(p.y - cop.y, p.x - cop.x);
     const top = 300 + stars * 55 + (G.mission.id === 6 ? 40 : 0);
     cop.angle += clamp(angleDiff(cop.angle, desired), -2.6 * dt, 2.6 * dt);
@@ -85,8 +96,11 @@ export function updatePolice(G, dt) {
         if (Math.abs(cop.speed) > 120) damagePlayer(G, 6, 'rammed by police');
       } else {
         damagePlayer(G, 8, 'beaten by police');
-        // Shove the player away so the cop doesn't stick.
-        p.x += Math.cos(desired) * 26; p.y += Math.sin(desired) * 26;
+        // Shove the player away so the cop does not stick to them.
+        // A short shove: a long one would throw the player out of a small
+        // hold zone (the bank vault) on every ram.
+        p.x = clamp(p.x + Math.cos(desired) * 12, 20, WORLD_W - 20);
+        p.y = clamp(p.y + Math.sin(desired) * 12, 20, WORLD_H - 20);
       }
       if (Math.random() < dt * 2) G.audio.playCrash();
     }
@@ -99,8 +113,7 @@ export function updatePolice(G, dt) {
     cop.y += Math.sin(cop.angle) * cop.speed * dt;
     cop.x = clamp(cop.x, 24, WORLD_W - 24);
     cop.y = clamp(cop.y, 24, WORLD_H - 24);
-    // Cops plough through buildings slowly (they are the law, not the physics).
-    // Keep them out of buildings with a soft push.
+    // Cops steer around buildings instead of driving through them.
     for (const b of G.buildings) {
       if (cop.x > b.x - 20 && cop.x < b.x + b.w + 20 && cop.y > b.y - 20 && cop.y < b.y + b.h + 20) {
         cop.angle += 1.4 * dt;
@@ -112,8 +125,7 @@ export function updatePolice(G, dt) {
 
 // Heat: crimes add, time cools. Called every frame.
 export function updateHeat(G, dt) {
-  const now = G.time;
-  if (G.wanted > 0 && now - G.lastCrimeT > 9 && !G.mission.heatLock) {
+  if (G.wanted > 0 && G.time - G.lastCrimeT > 9 && !G.mission.heatLock) {
     G.heat = Math.max(0, G.heat - dt * 2.2);
   }
   const w = wantedFromHeat(G.heat);

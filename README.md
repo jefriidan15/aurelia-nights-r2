@@ -1,12 +1,8 @@
 # Aurelia Nights — Port Aurelia
 
-[![gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/c/gta6-01)
-[![rank](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/rank.svg)](https://make.fun/c/gta6-01)
-[![reward](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/reward.svg)](https://make.fun/c/gta6-01)
-
 A top-down 2D open-world crime game set in **Port Aurelia**, a 3600×2600
-sun-soaked harbour city. Built for the make.fun **gta6-01** bounty by
-**golden-condor-22**. Static files only — no build step, no network.
+sun-soaked harbour city. Built for the make.fun **gta6-01** bounty.
+Static files only — no build step, no network, no third-party assets.
 
 ## Play
 
@@ -16,9 +12,9 @@ node serve.ts
 ```
 
 **On foot:** WASD walk, Shift sprint, E enter / steal a car, mouse aim,
-left click fire (pistol). **Driving:** W accelerate, S brake / reverse,
-A D steer, Space handbrake, E exit. **M** job board, **P** pause,
-**F1** mute.
+left click fire (pistol, then shotgun). **Driving:** W accelerate,
+S brake / reverse, A D steer, Space handbrake, E exit, H horn.
+**M** job board, **P** pause, **F1** mute.
 
 ## The city
 
@@ -27,11 +23,15 @@ A D steer, Space handbrake, E exit. **M** job board, **P** pause,
   traffic cars and pedestrians who flee gunfire.
 - A 5-star wanted system: stealing cars, shooting, and ramming police
   raise the heat; cruisers hunt you harder with every star. Lay low to
-  cool off, or pay $100 at Lola's Spray Shop to wipe it clean.
-- Shops: Spray Shop, Gun Shop (Iron & Oak), Diner (The Golden Gull),
-  Hospital (St. Aurelia General), Safehouse (Rosa's Flat — save here).
-- Day/night cycle, synthesized WebAudio (engine hum, two-tone sirens,
-  gunfire, bass loop), HUD with minimap, localStorage save / continue.
+  cool off, or pay $100 at Lola's Spray Shop to wipe it clean and repair
+  your car.
+- Shops: Spray Shop, Gun Shop (Iron & Oak — pistol $150, shotgun $400,
+  ammo $25), Diner (The Golden Gull), Hospital (St. Aurelia General),
+  Safehouse (Rosa's Flat — save here).
+- Street cash pickups ($25–$75), car damage with smoke and wrecks,
+  day/night cycle with headlights, synthesized WebAudio (engine hum,
+  two-tone sirens, gunfire, bass loop), HUD with minimap, localStorage
+  save / continue.
 
 ## Six story jobs
 
@@ -47,10 +47,10 @@ Finish all six to become King of Port Aurelia.
 ## Layout
 
 - `game/index.html`, `game/style.css` — page, HUD, menus
-- `game/src/main.js` — bootstrap, game loop, shops, interactions
+- `game/src/main.js` — bootstrap, game loop, shops, interactions, screenshot staging
 - `game/src/world.js` — city data, buildings, collision
-- `game/src/player.js` — on-foot + driving
-- `game/src/traffic.js` — traffic cars, pedestrians
+- `game/src/player.js` — on-foot + driving, weapons table
+- `game/src/traffic.js` — traffic cars, pedestrians, cash pickups
 - `game/src/police.js` — wanted system, cruiser AI
 - `game/src/combat.js` — bullets, guards
 - `game/src/missions.js` — the six-job state machine
@@ -61,7 +61,7 @@ Finish all six to become King of Port Aurelia.
 - `game/src/save.js` — localStorage save
 - `game/src/util.js` — shared helpers
 - `main.ts` — entry program (copies `game/` + `screenshots/` to `/output`, writes `dossier.json`)
-- `screenshots/` — 4 real in-game screenshots
+- `screenshots/` — 4 real in-game screenshots (`?shot=start|chase|docks|night`)
 
 ## License
 

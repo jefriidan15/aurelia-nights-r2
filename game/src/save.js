@@ -1,26 +1,31 @@
-// localStorage save / load. One slot, versioned, plain JSON.
-export const SAVE_KEY = 'aurelia-nights-save-v1';
+// Aurelia Nights — localStorage save. One slot, versioned, plain JSON.
+// Nothing here ever touches the network; a blocked storage just fails soft.
+export const SAVE_KEY = 'aurelia-nights-save-v2';
 
 export function saveGame(G) {
   try {
     const p = G.player;
     const data = {
-      v: 1,
+      v: 2,
       savedAt: Date.now(),
       money: p.money,
       health: p.health,
-      hasGun: p.hasGun,
+      weapon: p.weapon,
       ammo: p.ammo,
-      x: p.x, y: p.y,
+      x: p.x,
+      y: p.y,
       wanted: G.wanted,
       heat: G.heat,
       clock: G.clock,
       completed: G.completed,
       playSeconds: Math.round(G.time),
+      pickups: G.pickupsTaken || 0,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;
-  } catch (e) { return false; }
+  } catch (e) {
+    return false;
+  }
 }
 
 export function loadSave() {
@@ -28,24 +33,43 @@ export function loadSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const d = JSON.parse(raw);
-    if (!d || d.v !== 1) return null;
+    if (!d || (d.v !== 1 && d.v !== 2)) return null;
     return d;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
 
 export function applySave(G, d) {
   const p = G.player;
   p.money = d.money ?? 250;
-  p.health = d.health ?? 100;
-  p.hasGun = !!d.hasGun;
+  // A save written at 0 HP (saved right after being busted) must not
+  // respawn the player dead.
+  p.health = Math.max(10, d.health ?? 100);
+  p.weapon = d.weapon || (d.hasGun ? 'pistol' : 'none');
+  p.hasGun = p.weapon !== 'none';
   p.ammo = d.ammo ?? 0;
-  p.x = d.x ?? 700; p.y = d.y ?? 1000;
-  p.onFoot = true; p.car = null;
+  p.x = d.x ?? 700;
+  p.y = d.y ?? 1000;
+  p.onFoot = true;
+  p.car = null;
   G.wanted = d.wanted ?? 0;
   G.heat = d.heat ?? 0;
   G.clock = d.clock ?? 8 * 3600;
   G.completed = d.completed || {};
   G.time = d.playSeconds ?? 0;
+  G.pickupsTaken = d.pickups || 0;
 }
 
-export function hasSave() { return loadSave() !== null; }
+export function hasSave() {
+  return loadSave() !== null;
+}
+
+export function clearSave() {
+  try {
+    localStorage.removeItem(SAVE_KEY);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}

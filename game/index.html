@@ -18,6 +18,7 @@
       <div id="money">$0</div>
       <div id="health-wrap"><div id="health-bar"></div><span id="health-text">100</span></div>
       <div id="ammo"></div>
+      <div id="jobs">0/6 jobs</div>
     </div>
     <div id="objective-box"><div id="objective-title">FREE ROAM</div><div id="objective-text">Explore Port Aurelia. Press M for missions.</div></div>
     <div id="clock-box"><span id="clock">08:00</span><span id="speed">0 mph</span></div>
@@ -33,7 +34,7 @@
       <p class="tagline">Six jobs. Five stars. One city that never sleeps.</p>
       <div class="title-buttons">
         <button id="btn-new">NEW GAME</button>
-        <button id="btn-continue">CONTINUE</button>
+        <button id="btn-continue" class="secondary">CONTINUE</button>
         <button id="btn-how">HOW TO PLAY</button>
       </div>
       <div id="save-info"></div>
@@ -44,10 +45,10 @@
   <div id="how-screen" class="screen hidden">
     <div class="panel">
       <h2>HOW TO PLAY</h2>
-      <p><b>On foot:</b> WASD walk, Shift sprint, E enter a car, Space jump a fence (no-op), Mouse aim, Left click fire (pistol).</p>
-      <p><b>Driving:</b> W accelerate, S brake / reverse, A D steer, Space handbrake, E exit the car.</p>
-      <p><b>Crime:</b> stealing a car, shooting, or ramming police raises your wanted level (1&ndash;5 stars). Cops hunt you harder with every star. Lay low to cool off, or pay $100 at a Spray Shop to wipe it clean.</p>
-      <p><b>Shops:</b> stand by a shop door and press E &mdash; Spray Shop clears wanted, Gun Shop sells guns &amp; ammo, Diner heals, Hospital fully heals, Safehouse saves the game.</p>
+      <p><b>On foot:</b> WASD walk, Shift sprint, E enter a car, Mouse aim, Left click fire. Pistol first, shotgun later.</p>
+      <p><b>Driving:</b> W accelerate, S brake / reverse, A D steer, Space handbrake, E exit the car, H horn.</p>
+      <p><b>Crime:</b> stealing a car, shooting, or ramming police raises your wanted level (1&ndash;5 stars). Cops hunt you harder with every star. Lay low to cool off, or pay $100 at a Spray Shop to wipe it clean and repair your car.</p>
+      <p><b>Shops:</b> stand by a shop door and press E &mdash; Spray Shop clears wanted, Gun Shop sells guns &amp; ammo, Diner heals, Hospital fully heals, Safehouse saves the game. Green $ pickups on the street are free cash.</p>
       <p><b>Missions:</b> press M, pick a job, follow the yellow marker. Finish all six to own the night.</p>
       <button id="btn-how-back">BACK</button>
     </div>

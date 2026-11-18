@@ -1,7 +1,12 @@
 // Aurelia Nights — make.fun gta6-01 entry program (Node 22, standard library only).
-// Copies this repository's game/ and screenshots/ to /output and writes
-// /output/dossier.json with the vendored make.fun library, exactly as the kit
-// starter does. Outside the grader, MAKEFUN_OUTPUT_DIR stands in for /output:
+// The game is this directory's game/ folder: plain static files a desktop
+// browser loads offline (game/index.html and its ES modules, no library and
+// no network request). This program copies game/ and screenshots/ from beside
+// this file to /output and writes /output/dossier.json, the summary the judge
+// reads, with the vendored make.fun library.
+//
+// Serve it locally with `node serve.ts`, then open http://localhost:8080.
+// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
