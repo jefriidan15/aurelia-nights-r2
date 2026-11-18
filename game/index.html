@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aurelia Nights — Port Aurelia</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" width="1280" height="800"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="hud-top-left">
+      <div id="money">$<span id="money-val">250</span></div>
+      <div id="health-bar"><div id="health-fill"></div><span id="health-text">100</span></div>
+      <div id="ammo"></div>
+    </div>
+    <div id="hud-top-right">
+      <div id="wanted"></div>
+      <div id="clock">08:00</div>
+    </div>
+    <div id="mission-box">
+      <div id="mission-title"></div>
+      <div id="mission-objective"></div>
+      <div id="mission-progress"></div>
+    </div>
+    <div id="toast"></div>
+    <div id="hint"></div>
+    <canvas id="minimap" width="200" height="150"></canvas>
+    <div id="controls-hint">WASD move &middot; E enter/exit car &middot; F steal car &middot; Click shoot &middot; Q weapon &middot; P pause &middot; M mute</div>
+  </div>
+
+  <div id="title-screen" class="overlay">
+    <div class="panel">
+      <h1>AURELIA <span>NIGHTS</span></h1>
+      <p class="tagline">Port Aurelia. One driver. Six jobs. No way out but through.</p>
+      <p class="story">Rook Vane owes the harbour syndicate fifty grand. The only way to pay it
+      back is to run their jobs — steal, dodge the Port Aurelia PD, and stay alive
+      until the last checkpoint falls.</p>
+      <div class="menu-buttons">
+        <button id="btn-new">NEW GAME</button>
+        <button id="btn-continue" class="hidden">CONTINUE</button>
+        <button id="btn-how">HOW TO PLAY</button>
+      </div>
+      <p class="foot">Aurelia Nights &middot; an original open-world crime game &middot; keyboard + mouse &middot; sound on for the full cut</p>
+    </div>
+  </div>
+
+  <div id="how-screen" class="overlay hidden">
+    <div class="panel">
+      <h2>HOW TO PLAY</h2>
+      <table class="keys">
+        <tr><td>W A S D / arrows</td><td>Move on foot / drive</td></tr>
+        <tr><td>Mouse + click</td><td>Aim and shoot (when armed)</td></tr>
+        <tr><td>E</td><td>Enter / exit a car</td></tr>
+        <tr><td>F</td><td>Steal a parked car (raises wanted)</td></tr>
+        <tr><td>Q</td><td>Switch weapon</td></tr>
+        <tr><td>R</td><td>Reload</td></tr>
+        <tr><td>P / Esc</td><td>Pause</td></tr>
+        <tr><td>M</td><td>Mute sound</td></tr>
+      </table>
+      <p>Follow the yellow marker. Finish all six missions to win. Getting wasted
+      sends you to St. Marrow Hospital ($200). Getting busted by the PD fails the
+      mission. Spray shops repaint your car and clear your heat — for a price.
+      The diner heals you. The safehouse saves your game and cools your wanted level.</p>
+      <button id="btn-how-back">BACK</button>
+    </div>
+  </div>
+
+  <div id="pause-screen" class="overlay hidden">
+    <div class="panel">
+      <h2>PAUSED</h2>
+      <div class="menu-buttons">
+        <button id="btn-resume">RESUME</button>
+        <button id="btn-save">SAVE GAME</button>
+        <button id="btn-quit">QUIT TO TITLE</button>
+      </div>
+      <p id="save-status"></p>
+    </div>
+  </div>
+
+  <div id="end-screen" class="overlay hidden">
+    <div class="panel">
+      <h2 id="end-title"></h2>
+      <p id="end-text"></p>
+      <div class="menu-buttons">
+        <button id="btn-again">PLAY AGAIN</button>
+        <button id="btn-end-title">TITLE SCREEN</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
