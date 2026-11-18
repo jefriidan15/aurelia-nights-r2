@@ -8,123 +8,24 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="game-canvas" width="1280" height="800"></canvas>
-
-<div id="hud" class="hidden"></div>
-
-<!-- Title -->
-<div id="screen-title" class="screen">
-  <div class="panel">
-    <h1>AURELIA NIGHTS</h1>
-    <p class="tagline">Port Aurelia never sleeps. Neither do you.</p>
-    <p class="story">You are Aurelia, driver-for-hire in Rosa's crew. Six jobs stand between
-      you and the crown of Port Aurelia — steal, survive, shoot, and outrun the
-      whole Port Aurelia PD. The harbour is yours if you can take it.</p>
-    <button id="btn-new-game" class="big">New Game</button>
-    <button id="btn-continue" class="big hidden">Continue</button>
-    <button id="btn-howto" class="big">How to Play</button>
-    <p class="foot">A top-down open-world crime game. All art, story and sound are original.</p>
-  </div>
+<div id="wrap">
+  <canvas id="game" width="1280" height="800"></canvas>
+  <div id="hint">Aurelia Nights — WASD walk &middot; E steal / enter &middot; Mouse aim, click fire &middot; M jobs &middot; P pause &middot; F1 mute</div>
 </div>
-
-<!-- How to -->
-<div id="screen-howto" class="screen hidden">
-  <div class="panel">
-    <h2>HOW TO PLAY</h2>
-    <div class="cols">
-      <div>
-        <h3>On foot</h3>
-        <p>WASD walk &middot; Shift sprint &middot; E steal / enter car<br>
-           Mouse aim &middot; Click fire &middot; 1 pistol / 2 shotgun</p>
-        <h3>Driving</h3>
-        <p>W accelerate &middot; S brake / reverse &middot; A D steer<br>
-           Space handbrake &middot; E exit car &middot; H horn</p>
-      </div>
-      <div>
-        <h3>Heat</h3>
-        <p>Stealing, shooting and ramming cops raise your stars.
-           Lay low to cool off, or pay $100 at Lola's Spray Shop.</p>
-        <h3>Keys</h3>
-        <p>M job board &middot; P pause &middot; F1 mute sound</p>
-        <h3>Shops</h3>
-        <p>Spray, guns, diner, hospital, safehouse (save).<br>
-           Grab street cash — $25 to $75 a pickup.</p>
-      </div>
-    </div>
-    <button id="btn-howto-back" class="big">Back</button>
-  </div>
-</div>
-
-<!-- Job board -->
-<div id="screen-jobboard" class="screen hidden">
-  <div class="panel wide">
-    <h2>ROSA'S JOB BOARD</h2>
-    <p class="tagline">Finish all six jobs to become King of Port Aurelia.</p>
-    <div id="job-list"></div>
-    <button id="btn-jobboard-close" class="big">Close (M)</button>
-  </div>
-</div>
-
-<!-- Pause -->
-<div id="screen-pause" class="screen hidden">
-  <div class="panel">
-    <h2>PAUSED</h2>
-    <p class="tagline">Port Aurelia waits for no one. Except now.</p>
-    <button id="btn-resume" class="big">Resume (P)</button>
-    <button id="btn-quit-title" class="big">Quit to Title</button>
-  </div>
-</div>
-
-<!-- Busted -->
-<div id="screen-busted" class="screen hidden">
-  <div class="panel">
-    <h2>BUSTED</h2>
-    <p class="tagline">The PD caught up with you. Fine paid, heat cleared.</p>
-    <button id="btn-busted-ok" class="big">Back on the street</button>
-  </div>
-</div>
-
-<!-- Wasted -->
-<div id="screen-wasted" class="screen hidden">
-  <div class="panel">
-    <h2>WASTED</h2>
-    <p class="tagline">St. Aurelia General patched you up. It cost you.</p>
-    <button id="btn-wasted-ok" class="big">Back on the street</button>
-  </div>
-</div>
-
-<!-- Win -->
-<div id="screen-win" class="screen hidden">
-  <div class="panel">
-    <h2>KING OF PORT AURELIA</h2>
-    <p class="tagline">All six jobs complete. The harbour is yours.</p>
-    <p id="win-stats" class="story"></p>
-    <button id="btn-win-again" class="big">Play Again</button>
-  </div>
-</div>
-
-<!-- End (unused placeholder kept for the screen set) -->
-<div id="screen-end" class="screen hidden">
-  <div class="panel">
-    <h2>THE END</h2>
-    <p class="tagline">Thanks for playing Aurelia Nights.</p>
-  </div>
-</div>
-
-<script src="src/config.js"></script>
-<script src="src/city.js"></script>
-<script src="src/particles.js"></script>
-<script src="src/vehicles.js"></script>
-<script src="src/walkers.js"></script>
-<script src="src/cops.js"></script>
-<script src="src/weapons.js"></script>
-<script src="src/jobs.js"></script>
-<script src="src/shops.js"></script>
-<script src="src/sound.js"></script>
-<script src="src/controls.js"></script>
-<script src="src/savegame.js"></script>
-<script src="src/hud.js"></script>
-<script src="src/draw.js"></script>
-<script src="src/engine.js"></script>
+<script src="src/settings.js"></script>
+<script src="src/rng.js"></script>
+<script src="src/world.js"></script>
+<script src="src/state.js"></script>
+<script src="src/input.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/player.js"></script>
+<script src="src/cars.js"></script>
+<script src="src/people.js"></script>
+<script src="src/police.js"></script>
+<script src="src/guns.js"></script>
+<script src="src/missions.js"></script>
+<script src="src/stores.js"></script>
+<script src="src/render.js"></script>
+<script src="src/loop.js"></script>
 </body>
 </html>
