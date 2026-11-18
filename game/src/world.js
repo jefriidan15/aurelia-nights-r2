@@ -1,17 +1,19 @@
-// Port Aurelia — the city itself. A fixed 3600 x 2600 hand-laid map: a road
-// grid, six districts, the harbour and pier to the south, five shops and the
-// mission landmarks. Coordinates are plain data, so the city is identical
-// on every load; buildings are generated deterministically from the grid.
-import { hash2 } from './util.js';
+// Port Aurelia — the city. A fixed 3600 x 2600 map, hand-laid: a road
+// grid, six districts, the harbour and pier down south, five shops and
+// the landmarks the jobs need. Coordinates are plain data, so the city is
+// identical on every load; buildings are generated from the grid with a
+// deterministic hash, so no two blocks look the same twice.
+import { hash2, rectsOverlap } from './util.js';
 
 export const WORLD_W = 3600;
 export const WORLD_H = 2600;
 
-// Vertical roads (x) and horizontal roads (y). Roads are 92 wide.
+// Roads are 92 wide. Avenues run north-south, streets east-west.
 export const AVENUES = [300, 700, 1100, 1500, 1900, 2300, 2700, 3100];
 export const STREETS = [300, 650, 1000, 1350, 1700, 2050, 2350];
 export const ROAD_HALF = 46;
 export const WATER_Y = 2450;
+export const SHOP_RANGE = 80; // how close the player must stand to use a shop
 
 export const DISTRICTS = [
   { name: 'Old Town', x: 0, y: 0, w: 1200, h: 800, tint: '#c9a06a' },
@@ -33,7 +35,7 @@ export const SHOPS = [
   { id: 'spray', kind: 'spray', name: "Lola's Paint — Spray Shop", short: 'Spray Shop', x: 700, y: 560, price: 100,
     desc: 'Fresh paint, clean plates. Wanted level wiped, car repaired.' },
   { id: 'gun', kind: 'gun', name: 'Iron & Oak — Gun Shop', short: 'Gun Shop', x: 1900, y: 1260, price: 150,
-    desc: 'Pistol $150, shotgun $400, ammo $25 / 24 rounds. Press E at the door.' },
+    desc: 'Pistol $150, shotgun $400, ammo $25 / 12 rounds. Press E at the door.' },
   { id: 'diner', kind: 'diner', name: 'The Golden Gull — Diner', short: 'Diner', x: 1100, y: 1560, price: 20,
     desc: 'A hot meal heals 40 HP for $20.' },
   { id: 'hospital', kind: 'hospital', name: 'St. Aurelia General', short: 'Hospital', x: 2700, y: 910, price: 200,
@@ -52,7 +54,31 @@ export const LANDMARKS = {
   playerSpawn: { x: 700, y: 1000 },
 };
 
-const PALETTE = ['#b98d5f', '#8f7fb8', '#7fa8b8', '#b87f7f', '#9a9a8a', '#6f8f7f', '#a8a06f', '#7f8fb8'];
+const PALETTE = ['#a87f52', '#7d6ea8', '#6f97a8', '#a86f6f', '#8a8a72', '#5f7f6f', '#97895f', '#6f7fa8'];
+
+function makeBuilding(x, y, w, h, ix, iy) {
+  const r = hash2(ix * 5 + 3, iy * 11 + 7);
+  return {
+    x, y, w, h,
+    color: PALETTE[Math.floor(r * PALETTE.length)],
+    roof: '#00000022',
+    tall: 1 + Math.floor(hash2(ix + 2, iy + 9) * 3),
+    label: '',
+    kind: 'block',
+  };
+}
+
+// Drop every building that overlaps a rect (except ones whose kind is in
+// keepKinds). Used to clear the bank lot, the vault plaza, and so on.
+function carveOut(buildings, rect, keepKinds = []) {
+  for (let i = buildings.length - 1; i >= 0; i--) {
+    const b = buildings[i];
+    if (keepKinds.includes(b.kind)) continue;
+    if (rectsOverlap(b.x, b.y, b.w, b.h, rect.x, rect.y, rect.w, rect.h)) {
+      buildings.splice(i, 1);
+    }
+  }
+}
 
 export function buildCity() {
   const buildings = [];
@@ -65,51 +91,34 @@ export function buildCity() {
       const bw = x1 - x0;
       const bh = y1 - y0;
       if (bw < 90 || bh < 90) continue;
-      // Wide blocks get two buildings; narrow ones get a single block.
-      if (hash2(ix, iy) > 0.55 && bw > 260) {
-        const cut = x0 + bw * (0.42 + hash2(ix + 9, iy) * 0.16);
+      // Wide blocks get split in two; the split point varies per block.
+      const roll = hash2(ix + 4, iy + 4);
+      if (roll > 0.5 && bw > 260) {
+        const cut = x0 + bw * (0.38 + hash2(ix + 13, iy + 3) * 0.24);
         buildings.push(makeBuilding(x0, y0, cut - x0 - 12, bh, ix, iy));
-        buildings.push(makeBuilding(cut + 12, y0, x1 - cut - 12, bh, ix + 40, iy));
+        buildings.push(makeBuilding(cut + 12, y0, x1 - cut - 12, bh, ix + 50, iy + 2));
+      } else if (roll > 0.22 && bh > 220) {
+        // Tall blocks split horizontally instead.
+        const cut = y0 + bh * (0.4 + hash2(ix + 7, iy + 11) * 0.2);
+        buildings.push(makeBuilding(x0, y0, bw, cut - y0 - 12, ix, iy));
+        buildings.push(makeBuilding(x0, cut + 12, bw, y1 - cut - 12, ix + 3, iy + 40));
       } else {
         buildings.push(makeBuilding(x0, y0, bw, bh, ix, iy));
       }
     }
   }
-  // The bank replaces whatever block stood on its lot.
+  // The bank sits on its own lot.
   const bank = LANDMARKS.bank;
-  for (let i = buildings.length - 1; i >= 0; i--) {
-    const b = buildings[i];
-    if (b.x < bank.x + bank.w && b.x + b.w > bank.x && b.y < bank.y + bank.h && b.y + b.h > bank.y) {
-      buildings.splice(i, 1);
-    }
-  }
+  carveOut(buildings, bank);
   buildings.push({ x: bank.x, y: bank.y, w: bank.w, h: bank.h, color: '#d8c27a', roof: '#8a7420', tall: 3, label: 'BANK', kind: 'bank' });
-  // The vault zone is the bank's front plaza: no building may cover it, or
+  // The vault zone is the bank's front plaza: it must stay walkable, or
   // the player could never stand inside the vault to hold it.
-  const vault = LANDMARKS.vault;
-  for (let i = buildings.length - 1; i >= 0; i--) {
-    const b = buildings[i];
-    if (b.kind !== 'bank' && b.x < vault.x + vault.w && b.x + b.w > vault.x && b.y < vault.y + vault.h && b.y + b.h > vault.y) {
-      buildings.splice(i, 1);
-    }
-  }
+  carveOut(buildings, LANDMARKS.vault, ['bank']);
   // Dock warehouses along the pier.
   for (let i = 0; i < 5; i++) {
     buildings.push({ x: 350 + i * 620, y: 2260, w: 300, h: 120, color: '#7d8896', roof: '#4a5566', tall: 1, label: 'WAREHOUSE ' + (i + 1), kind: 'dock' });
   }
   return buildings;
-}
-
-function makeBuilding(x, y, w, h, ix, iy) {
-  const r = hash2(ix * 3 + 1, iy * 7 + 2);
-  return {
-    x, y, w, h,
-    color: PALETTE[Math.floor(r * PALETTE.length)],
-    roof: '#00000022',
-    tall: 1 + Math.floor(hash2(ix, iy + 5) * 3),
-    label: '',
-    kind: 'block',
-  };
 }
 
 export function isOnRoad(x, y) {
@@ -140,7 +149,7 @@ export function nearestRoadPoint(x, y) {
 
 // Push a circle out of every building rectangle it overlaps.
 // Returns true when a collision happened.
-export function collideBuildings(buildings, obj, radius) {
+export function pushOutOfBuildings(buildings, obj, radius) {
   let hit = false;
   for (const b of buildings) {
     const cx = Math.max(b.x, Math.min(obj.x, b.x + b.w));
@@ -150,7 +159,7 @@ export function collideBuildings(buildings, obj, radius) {
     const d2 = dx * dx + dy * dy;
     if (d2 < radius * radius) {
       if (d2 < 0.0001) {
-        // Dead centre of a building: push straight up out of it.
+        // Dead centre of a building: shove straight up out of it.
         obj.y = b.y - radius;
       } else {
         const d = Math.sqrt(d2);
@@ -163,7 +172,7 @@ export function collideBuildings(buildings, obj, radius) {
   return hit;
 }
 
-export function pointInBuilding(buildings, x, y) {
+export function buildingAt(buildings, x, y) {
   for (const b of buildings) {
     if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return b;
   }

@@ -1,20 +1,20 @@
-// The 5-star wanted system and police cruiser AI. Heat rises with crime and
-// cools when the player behaves; cruisers scale in count, speed and
+// The 5-star wanted system and police cruiser AI. Heat rises with crime
+// and cools when the player behaves; cruisers scale in count, speed and
 // aggression with every star, and shoot at the player from 3 stars up.
 import { clamp, dist, angleDiff, rand } from './util.js';
-import { WORLD_W, WORLD_H, AVENUES, STREETS } from './world.js';
+import { WORLD_W, WORLD_H, AVENUES, STREETS, nearestRoadPoint } from './world.js';
 import { makeCar, damagePlayer } from './player.js';
 
-// Heat thresholds for each star.
+// Heat needed to reach each star level (index = stars).
 export const STAR_HEAT = [0, 20, 45, 70, 90, 115];
 
-export function wantedFromHeat(heat) {
+export function starsForHeat(heat) {
   let w = 0;
   for (let i = 1; i <= 5; i++) if (heat >= STAR_HEAT[i]) w = i;
   return w;
 }
 
-export function copsForStars(stars) {
+export function copCountForStars(stars) {
   return [0, 2, 3, 5, 7, 10][stars];
 }
 
@@ -28,7 +28,7 @@ export function makeCop(x, y) {
   return car;
 }
 
-export function spawnCop(G) {
+export function spawnCruiser(G) {
   const p = G.player;
   // Spawn on a road just outside the camera view.
   const angle = rand(0, Math.PI * 2);
@@ -36,17 +36,10 @@ export function spawnCop(G) {
   let x = clamp(p.x + Math.cos(angle) * r, 120, WORLD_W - 120);
   let y = clamp(p.y + Math.sin(angle) * r, 120, WORLD_H - 120);
   // Snap to the nearest intersection when one is close.
-  let best = null;
-  let bd = Infinity;
-  for (const a of AVENUES) {
-    for (const s of STREETS) {
-      const d = Math.hypot(a - x, s - y);
-      if (d < bd) { bd = d; best = { x: a, y: s }; }
-    }
-  }
-  if (best && bd < 320) {
-    x = best.x;
-    y = best.y;
+  const near = nearestRoadPoint(x, y);
+  if (near && Math.hypot(near.x - x, near.y - y) < 320) {
+    x = near.x;
+    y = near.y;
   }
   const cop = makeCop(x, y);
   cop.angle = Math.atan2(p.y - y, p.x - x);
@@ -55,13 +48,56 @@ export function spawnCop(G) {
   G.cars.push(cop);
 }
 
-export function updatePolice(G, dt) {
+function steerCop(G, cop, dt) {
+  const p = G.player;
+  const stars = G.wanted;
+  const d = dist(cop.x, cop.y, p.x, p.y);
+  // Pursuit: steer toward the player, faster and more reckless per star.
+  const desired = Math.atan2(p.y - cop.y, p.x - cop.x);
+  const top = 300 + stars * 55 + (G.mission.id === 6 ? 40 : 0);
+  cop.angle += clamp(angleDiff(cop.angle, desired), -2.6 * dt, 2.6 * dt);
+  cop.speed += ((d > 90 ? top : top * 0.4) - cop.speed) * Math.min(1, dt * 1.4);
+  // Ram the player when close.
+  if (d < 58) {
+    if (!p.onFoot && p.car) {
+      p.car.speed *= 0.82;
+      cop.speed *= 0.7;
+      if (Math.abs(cop.speed) > 120) damagePlayer(G, 6, 'rammed by police');
+    } else {
+      damagePlayer(G, 8, 'beaten by police');
+      // Shove the player away so the cop does not stick to them.
+      // A short shove: a long one would throw the player out of a small
+      // hold zone (the bank vault) on every ram.
+      p.x = clamp(p.x + Math.cos(desired) * 12, 20, WORLD_W - 20);
+      p.y = clamp(p.y + Math.sin(desired) * 12, 20, WORLD_H - 20);
+    }
+    if (Math.random() < dt * 2) G.audio.playCrash();
+  }
+  // Cops shoot at 3+ stars when the player is on foot and near.
+  if (stars >= 3 && p.onFoot && d < 420 && Math.random() < dt * (0.5 + stars * 0.22)) {
+    G.fireBullet(cop.x, cop.y, Math.atan2(p.y - cop.y, p.x - cop.x), 640, 'cop');
+    G.audio.playGunshot();
+  }
+  cop.x += Math.cos(cop.angle) * cop.speed * dt;
+  cop.y += Math.sin(cop.angle) * cop.speed * dt;
+  cop.x = clamp(cop.x, 24, WORLD_W - 24);
+  cop.y = clamp(cop.y, 24, WORLD_H - 24);
+  // Cops steer around buildings instead of driving through them.
+  for (const b of G.buildings) {
+    if (cop.x > b.x - 20 && cop.x < b.x + b.w + 20 && cop.y > b.y - 20 && cop.y < b.y + b.h + 20) {
+      cop.angle += 1.4 * dt;
+      cop.speed *= 0.985;
+    }
+  }
+}
+
+export function updateCops(G, dt) {
   const p = G.player;
   const stars = G.wanted;
   // Maintain the right number of cruisers.
-  const want = copsForStars(stars);
+  const want = copCountForStars(stars);
   if (G.cops.length < want && G.copSpawnT <= 0) {
-    spawnCop(G);
+    spawnCruiser(G);
     G.copSpawnT = stars >= 4 ? 0.9 : 1.6;
   }
   G.copSpawnT -= dt;
@@ -77,58 +113,28 @@ export function updatePolice(G, dt) {
       cop.x += Math.cos(cop.angle) * cop.speed * dt;
       cop.y += Math.sin(cop.angle) * cop.speed * dt;
       if (d > 1500 || cop.x < 40 || cop.x > WORLD_W - 40 || cop.y < 40 || cop.y > WORLD_H - 40) {
-        G.cops.splice(i, 1);
-        const ci = G.cars.indexOf(cop);
-        if (ci >= 0) G.cars.splice(ci, 1);
+        removeCop(G, i);
       }
       continue;
     }
-    // Pursuit: steer toward the player, faster and more reckless per star.
-    const desired = Math.atan2(p.y - cop.y, p.x - cop.x);
-    const top = 300 + stars * 55 + (G.mission.id === 6 ? 40 : 0);
-    cop.angle += clamp(angleDiff(cop.angle, desired), -2.6 * dt, 2.6 * dt);
-    cop.speed += ((d > 90 ? top : top * 0.4) - cop.speed) * Math.min(1, dt * 1.4);
-    // Ram the player when close.
-    if (d < 58) {
-      if (!p.onFoot && p.car) {
-        p.car.speed *= 0.82;
-        cop.speed *= 0.7;
-        if (Math.abs(cop.speed) > 120) damagePlayer(G, 6, 'rammed by police');
-      } else {
-        damagePlayer(G, 8, 'beaten by police');
-        // Shove the player away so the cop does not stick to them.
-        // A short shove: a long one would throw the player out of a small
-        // hold zone (the bank vault) on every ram.
-        p.x = clamp(p.x + Math.cos(desired) * 12, 20, WORLD_W - 20);
-        p.y = clamp(p.y + Math.sin(desired) * 12, 20, WORLD_H - 20);
-      }
-      if (Math.random() < dt * 2) G.audio.playCrash();
-    }
-    // Cops shoot at 3+ stars when the player is on foot and near.
-    if (stars >= 3 && p.onFoot && d < 420 && Math.random() < dt * (0.5 + stars * 0.22)) {
-      G.fireBullet(cop.x, cop.y, Math.atan2(p.y - cop.y, p.x - cop.x), 640, 'cop');
-      G.audio.playGunshot();
-    }
-    cop.x += Math.cos(cop.angle) * cop.speed * dt;
-    cop.y += Math.sin(cop.angle) * cop.speed * dt;
-    cop.x = clamp(cop.x, 24, WORLD_W - 24);
-    cop.y = clamp(cop.y, 24, WORLD_H - 24);
-    // Cops steer around buildings instead of driving through them.
-    for (const b of G.buildings) {
-      if (cop.x > b.x - 20 && cop.x < b.x + b.w + 20 && cop.y > b.y - 20 && cop.y < b.y + b.h + 20) {
-        cop.angle += 1.4 * dt;
-        cop.speed *= 0.985;
-      }
-    }
+    steerCop(G, cop, dt);
   }
 }
 
+// Take a cruiser out of both lists it lives in.
+function removeCop(G, i) {
+  const cop = G.cops[i];
+  G.cops.splice(i, 1);
+  const ci = G.cars.indexOf(cop);
+  if (ci >= 0) G.cars.splice(ci, 1);
+}
+
 // Heat: crimes add, time cools. Called every frame.
-export function updateHeat(G, dt) {
+export function updateWanted(G, dt) {
   if (G.wanted > 0 && G.time - G.lastCrimeT > 9 && !G.mission.heatLock) {
     G.heat = Math.max(0, G.heat - dt * 2.2);
   }
-  const w = wantedFromHeat(G.heat);
+  const w = starsForHeat(G.heat);
   if (w !== G.wanted) {
     G.wanted = w;
     if (w === 0) G.toast('You lost the cops. Heat is off.', '#7dff8a');

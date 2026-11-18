@@ -1,12 +1,12 @@
 // Canvas rendering: the city, cars, people, effects, and the minimap.
 // Day/night is a tint over the whole scene driven by the in-game clock;
 // at night, headlights throw a cone of light ahead of each car.
-import { clamp, dist, fmtClock, fmtMoney, hash2 } from './util.js';
+import { clamp, dist, fmtClock, hash2 } from './util.js';
 import { WORLD_W, WORLD_H, AVENUES, STREETS, ROAD_HALF, WATER_Y, DISTRICTS, SHOPS, LANDMARKS, districtAt } from './world.js';
 
-export function dayNightTint(clock) {
+// Clock hours -> 0 = deep night, 1 = full day.
+export function daylight(clock) {
   const h = (clock / 3600) % 24;
-  // 0 = deep night, 1 = full day.
   let day = 0;
   if (h >= 6 && h < 9) day = (h - 6) / 3;
   else if (h >= 9 && h < 17) day = 1;
@@ -19,7 +19,7 @@ export function render(G) {
   const ctx = G.ctx;
   const view = G.view;
   const cam = G.camera;
-  const { day } = dayNightTint(G.clock);
+  const { day } = daylight(G.clock);
   const night = 1 - day;
 
   ctx.fillStyle = day > 0.5 ? '#3f6b3a' : '#1d3320';
@@ -29,23 +29,32 @@ export function render(G) {
   ctx.scale(cam.zoom, cam.zoom);
   ctx.translate(-cam.x + view.w / 2 / cam.zoom, -cam.y + view.h / 2 / cam.zoom);
 
-  drawGround(G, ctx, day);
-  drawWater(G, ctx);
-  drawRoads(G, ctx);
-  drawBuildings(G, ctx);
-  drawLandmarks(G, ctx);
-  drawShops(G, ctx);
-  drawPickups(G, ctx);
-  drawMissionMarker(G, ctx);
-  drawPeds(G, ctx);
-  drawCars(G, ctx, day);
-  drawGuards(G, ctx);
-  drawPlayer(G, ctx);
-  drawBullets(G, ctx);
-  drawEffects(G, ctx);
+  paintGround(G, ctx, day);
+  paintWater(G, ctx);
+  paintRoads(G, ctx);
+  paintBuildings(G, ctx);
+  paintLandmarks(G, ctx);
+  paintShops(G, ctx);
+  paintPickups(G, ctx);
+  paintMissionMarker(G, ctx);
+  paintPeds(G, ctx);
+  paintCars(G, ctx, day);
+  paintGuards(G, ctx);
+  paintPlayer(G, ctx);
+  paintBullets(G, ctx);
+  paintParticles(G, ctx);
   ctx.restore();
 
   // Night overlay + vignette.
+  paintNight(G, ctx, night);
+
+  drawMinimap(G);
+  paintDistrictTag(G, ctx);
+}
+
+// A blue-black wash over the scene at night, plus a soft vignette.
+function paintNight(G, ctx, night) {
+  const view = G.view;
   if (night > 0.05) {
     ctx.fillStyle = 'rgba(8, 12, 42, ' + (night * 0.42).toFixed(3) + ')';
     ctx.fillRect(0, 0, view.w, view.h);
@@ -55,12 +64,9 @@ export function render(G) {
   vg.addColorStop(1, 'rgba(0,0,0,0.34)');
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, view.w, view.h);
-
-  drawMinimap(G);
-  drawDistrictTag(G, ctx);
 }
 
-function drawGround(G, ctx, day) {
+function paintGround(G, ctx, day) {
   ctx.fillStyle = day > 0.5 ? '#4a7a44' : '#243d24';
   ctx.fillRect(0, 0, WORLD_W, WATER_Y);
   ctx.font = 'bold 44px Arial';
@@ -82,7 +88,7 @@ function drawGround(G, ctx, day) {
   }
 }
 
-function drawWater(G, ctx) {
+function paintWater(G, ctx) {
   const t = G.time;
   ctx.fillStyle = '#14486b';
   ctx.fillRect(0, WATER_Y, WORLD_W, WORLD_H - WATER_Y);
@@ -103,7 +109,7 @@ function drawWater(G, ctx) {
   }
 }
 
-function drawRoads(G, ctx) {
+function paintRoads(G, ctx) {
   ctx.fillStyle = '#33363d';
   for (const a of AVENUES) ctx.fillRect(a - ROAD_HALF, 0, ROAD_HALF * 2, WATER_Y);
   for (const s of STREETS) ctx.fillRect(0, s - ROAD_HALF, WORLD_W, ROAD_HALF * 2);
@@ -128,7 +134,7 @@ function drawRoads(G, ctx) {
   }
 }
 
-function drawBuildings(G, ctx) {
+function paintBuildings(G, ctx) {
   for (const b of G.buildings) {
     ctx.fillStyle = b.color;
     ctx.fillRect(b.x, b.y, b.w, b.h);
@@ -137,14 +143,16 @@ function drawBuildings(G, ctx) {
     ctx.fillRect(b.x + 6, b.y + 6, b.w - 12, b.h - 12);
     ctx.fillStyle = b.color;
     ctx.fillRect(b.x + 10, b.y + 10, b.w - 20, b.h - 20);
-    // Windows: a grid of lit dots, denser on taller buildings.
+    // Windows: a grid of lit dots.
     ctx.fillStyle = 'rgba(255,240,170,0.5)';
     const cols = Math.max(1, Math.floor(b.w / 34));
     const rows = Math.max(1, Math.floor(b.h / 30));
     for (let cx = 0; cx < cols; cx++) {
       for (let cy = 0; cy < rows; cy++) {
         if (hash2(b.x + cx * 7, b.y + cy * 11) > 0.62) {
-          ctx.fillRect(b.x + 16 + cx * ((b.w - 32) / Math.max(1, cols - 1) || 0), b.y + 16 + cy * ((b.h - 32) / Math.max(1, rows - 1) || 0), 7, 6);
+          const wx = cols > 1 ? b.x + 16 + cx * ((b.w - 32) / (cols - 1)) : b.x + b.w / 2;
+          const wy = rows > 1 ? b.y + 16 + cy * ((b.h - 32) / (rows - 1)) : b.y + b.h / 2;
+          ctx.fillRect(wx, wy, 7, 6);
         }
       }
     }
@@ -157,7 +165,7 @@ function drawBuildings(G, ctx) {
   }
 }
 
-function drawLandmarks(G, ctx) {
+function paintLandmarks(G, ctx) {
   const bank = LANDMARKS.bank;
   ctx.fillStyle = '#e8d9a0';
   ctx.font = 'bold 20px Arial';
@@ -192,7 +200,7 @@ function drawLandmarks(G, ctx) {
 const SHOP_COLORS = { spray: '#ff5b8f', gun: '#c9a227', diner: '#3bd2a0', hospital: '#e8e8e8', safehouse: '#8a3bd2' };
 const SHOP_LETTERS = { spray: 'S', gun: 'G', diner: 'D', hospital: '+', safehouse: 'H' };
 
-function drawShops(G, ctx) {
+function paintShops(G, ctx) {
   for (const s of SHOPS) {
     ctx.fillStyle = SHOP_COLORS[s.kind] || '#fff';
     ctx.beginPath(); ctx.arc(s.x, s.y, 16, 0, Math.PI * 2); ctx.fill();
@@ -209,7 +217,7 @@ function drawShops(G, ctx) {
   }
 }
 
-function drawPickups(G, ctx) {
+function paintPickups(G, ctx) {
   for (const pk of G.pickups || []) {
     if (pk.taken) continue;
     const bob = Math.sin(pk.bob) * 3;
@@ -225,7 +233,7 @@ function drawPickups(G, ctx) {
   }
 }
 
-function drawMissionMarker(G, ctx) {
+function paintMissionMarker(G, ctx) {
   const M = G.mission;
   if (!M.active || !M.marker) return;
   const m = M.marker;
@@ -267,7 +275,7 @@ function drawMissionMarker(G, ctx) {
   }
 }
 
-function drawPeds(G, ctx) {
+function paintPeds(G, ctx) {
   for (const ped of G.peds) {
     if (ped.dead) continue;
     ctx.save();
@@ -292,7 +300,7 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function drawCarShape(G, ctx, car, headlights) {
+function paintOneCar(G, ctx, car, headlights) {
   ctx.save();
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
@@ -338,7 +346,7 @@ function drawCarShape(G, ctx, car, headlights) {
   ctx.restore();
 }
 
-function drawCars(G, ctx, day) {
+function paintCars(G, ctx, day) {
   const night = day < 0.5;
   for (const car of G.cars) {
     if (car.dead) {
@@ -355,19 +363,15 @@ function drawCars(G, ctx, day) {
       }
       continue;
     }
-    drawCarShape(G, ctx, car, night);
+    paintOneCar(G, ctx, car, night);
     // Smoke when the player's car is badly damaged.
     if (car === G.player.car && car.hp < 45 && Math.random() < 0.25) {
-      G.particles.push({ x: car.x, y: car.y - 8, vx: randSmoke(), vy: -40, life: 0.8, max: 0.8, color: '#999', size: 6 });
+      G.particles.push({ x: car.x, y: car.y - 8, vx: (Math.random() - 0.5) * 30, vy: -40, life: 0.8, max: 0.8, color: '#999', size: 6 });
     }
   }
 }
 
-function randSmoke() {
-  return (Math.random() - 0.5) * 30;
-}
-
-function drawGuards(G, ctx) {
+function paintGuards(G, ctx) {
   for (const g of G.guards) {
     if (g.dead) continue;
     ctx.save();
@@ -391,7 +395,7 @@ function drawGuards(G, ctx) {
   }
 }
 
-function drawPlayer(G, ctx) {
+function paintPlayer(G, ctx) {
   const p = G.player;
   if (p.onFoot) {
     ctx.save();
@@ -431,14 +435,14 @@ function drawPlayer(G, ctx) {
   ctx.beginPath(); ctx.arc(p.x, p.y, p.onFoot ? 18 : 32, 0, Math.PI * 2); ctx.stroke();
 }
 
-function drawBullets(G, ctx) {
+function paintBullets(G, ctx) {
   ctx.fillStyle = '#ffe9a0';
   for (const b of G.bullets) {
     ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill();
   }
 }
 
-function drawEffects(G, ctx) {
+function paintParticles(G, ctx) {
   for (const pt of G.particles) {
     ctx.globalAlpha = Math.max(0, pt.life / pt.max);
     ctx.fillStyle = pt.color;
@@ -447,7 +451,7 @@ function drawEffects(G, ctx) {
   ctx.globalAlpha = 1;
 }
 
-function drawDistrictTag(G, ctx) {
+function paintDistrictTag(G, ctx) {
   const name = districtAt(G.player.x, G.player.y);
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.font = 'bold 13px Arial';

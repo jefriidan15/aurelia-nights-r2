@@ -5,8 +5,15 @@
 [![reward](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
 A top-down 2D open-world crime game set in **Port Aurelia**, a 3600×2600
-sun-soaked harbour city. Built for the [make.fun **gta6-01** bounty](https://make.fun/bounty/gta6-01).
-Static files only — no build step, no network, no third-party assets.
+harbour city where the sun never quite sets on trouble. Built for the
+[make.fun **gta6-01** bounty](https://make.fun/bounty/gta6-01).
+Static files only — no build step, no network calls, no third-party assets.
+Everything on screen is drawn and synthesized by the game's own code.
+
+You play Aurelia, a driver-for-hire who fell in with Rosa's crew. The
+city is yours to roam: steal a car off any street, outrun the Port
+Aurelia PD, take jobs from the board, and work your way from small-time
+boosts to the biggest score the harbour has ever seen.
 
 ## Play
 
@@ -16,15 +23,19 @@ node serve.ts
 ```
 
 **On foot:** WASD walk, Shift sprint, E enter / steal a car, mouse aim,
-left click fire (pistol, then shotgun). **Driving:** W accelerate,
+left click fire (pistol first, shotgun later). **Driving:** W accelerate,
 S brake / reverse, A D steer, Space handbrake, E exit, H horn.
 **M** job board, **P** pause, **F1** mute.
+
+Screenshot staging: opening the game with `?shot=start|chase|docks|night`
+stages a real in-game scene instead of the title screen — that is how the
+four screenshots in `screenshots/` were captured.
 
 ## The city
 
 - Six districts (Old Town, Downtown, Marina, Little Vesper, Midtown,
   The Docks), a harbour with a working pier, and a full road grid with
-  traffic cars and pedestrians who flee gunfire.
+  16 traffic cars and 30 pedestrians who flee gunfire.
 - A 5-star wanted system: stealing cars, shooting, and ramming police
   raise the heat; cruisers hunt you harder with every star. Lay low to
   cool off, or pay $100 at Lola's Spray Shop to wipe it clean and repair

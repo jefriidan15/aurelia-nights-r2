@@ -19,7 +19,7 @@ html, body {
 /* ---- HUD ---- */
 #hud { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
 #hud-top-left { position: absolute; top: 14px; left: 14px; }
-#stars { font-size: 26px; letter-spacing: 2px; color: #ffd23e; text-shadow: 0 0 8px rgba(0,0,0,0.8); }
+#stars { font-size: 24px; letter-spacing: 3px; color: #ffd23e; text-shadow: 0 0 8px rgba(0,0,0,0.8); }
 #stars .off { color: rgba(255,255,255,0.25); }
 #money { font-size: 26px; font-weight: 800; color: #7dff8a; text-shadow: 0 2px 4px #000; margin-top: 2px; }
 #health-wrap {
@@ -66,9 +66,9 @@ html, body {
   background: linear-gradient(160deg, rgba(11,14,26,0.88), rgba(60,20,60,0.72));
 }
 .title-inner { text-align: center; max-width: 640px; padding: 20px; }
-.title-kicker { letter-spacing: 4px; font-size: 13px; color: #7dff8a; font-weight: 700; }
+.title-kicker { letter-spacing: 4px; font-size: 13px; color: #7dff8a; font-weight: 700; text-shadow: 0 1px 3px #000; }
 .title-inner h1 {
-  margin: 10px 0 4px; font-size: 84px; line-height: 0.95; font-weight: 900;
+  margin: 10px 0 4px; font-size: 80px; line-height: 0.95; font-weight: 900;
   color: #ffd23e; text-shadow: 0 0 30px rgba(255,210,62,0.45), 0 4px 0 #7a2b00;
 }
 .tagline { font-size: 18px; color: #d7e2ff; margin: 8px 0 24px; }
@@ -83,7 +83,7 @@ button.secondary { background: #8b93a3; color: #fff; box-shadow: 0 3px 0 #555a63
 #save-info { margin-top: 16px; font-size: 14px; color: #d7e2ff; }
 .foot { margin-top: 22px; font-size: 13px; color: #9aa3b5; }
 .panel {
-  background: rgba(16,19,31,0.96); border: 1px solid rgba(255,210,62,0.5);
+  background: rgba(16,19,31,0.96); border: 1px solid rgba(255,210,62,0.65);
   border-radius: 10px; padding: 26px 30px; max-width: 720px; width: 92%;
   max-height: 86vh; overflow-y: auto;
 }
@@ -94,7 +94,7 @@ button.secondary { background: #8b93a3; color: #fff; box-shadow: 0 3px 0 #555a63
 #mission-list { display: flex; flex-direction: column; gap: 10px; }
 .mission-row {
   display: flex; align-items: center; gap: 14px; width: 100%;
-  background: #1c2138; color: #eef1f5; border: 1px solid rgba(255,255,255,0.15);
+  background: #1a1f36; color: #eef1f5; border: 1px solid rgba(255,255,255,0.15);
   border-radius: 8px; padding: 12px 14px; text-align: left; box-shadow: none;
 }
 .mission-row:hover { background: #262c4a; border-color: #ffd23e; }

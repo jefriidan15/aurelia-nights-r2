@@ -4,7 +4,7 @@
 import { fmtMoney, fmtClock } from './util.js';
 import { MISSIONS } from './missions.js';
 import { WEAPONS } from './player.js';
-import { hasSave, loadSave } from './save.js';
+import { hasSave, saveSummary } from './save.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -44,10 +44,9 @@ export function initUI(G) {
 export function refreshTitleSaveInfo() {
   const info = $('save-info');
   const btn = $('btn-continue');
-  if (hasSave()) {
-    const d = loadSave();
-    const done = Object.values(d.completed || {}).filter(Boolean).length;
-    info.textContent = 'Save found — ' + fmtMoney(d.money) + ', ' + done + '/6 jobs done, saved ' + new Date(d.savedAt).toLocaleString();
+  const s = saveSummary();
+  if (s) {
+    info.textContent = 'Save found — ' + fmtMoney(s.money) + ', ' + s.jobs + '/6 jobs done, saved ' + new Date(s.savedAt).toLocaleString();
     btn.classList.remove('secondary');
   } else {
     info.textContent = 'No save yet.';
@@ -91,47 +90,49 @@ export function showWin() {
   show('win-screen');
 }
 
+function missionRow(G, m) {
+  const done = !!G.completed[m.id];
+  const row = document.createElement('button');
+  row.className = 'mission-row' + (done ? ' done' : '');
+  const num = document.createElement('div');
+  num.className = 'mnum';
+  num.textContent = m.id;
+  const body = document.createElement('div');
+  body.className = 'mbody';
+  const title = document.createElement('div');
+  title.className = 'mname';
+  title.textContent = m.name;
+  const desc = document.createElement('div');
+  desc.className = 'mdesc';
+  desc.textContent = m.desc;
+  body.appendChild(title);
+  body.appendChild(desc);
+  const reward = document.createElement('div');
+  reward.className = done ? 'mdone' : 'mreward';
+  reward.textContent = done ? 'DONE ✓' : fmtMoney(m.reward);
+  row.appendChild(num);
+  row.appendChild(body);
+  row.appendChild(reward);
+  row.addEventListener('click', () => {
+    if (done) {
+      toast("Already done — the money's in your pocket.", '#7dff8a');
+      return;
+    }
+    if (G.mission.active) {
+      toast('Finish the current job first.', '#ff9a3d');
+      return;
+    }
+    G.startMission(m.id);
+    hideScreens();
+    G.resume();
+  });
+  return row;
+}
+
 export function showMissions(G) {
   const list = $('mission-list');
   list.innerHTML = '';
-  for (const m of MISSIONS) {
-    const done = !!G.completed[m.id];
-    const row = document.createElement('button');
-    row.className = 'mission-row' + (done ? ' done' : '');
-    const name = document.createElement('div');
-    name.className = 'mnum';
-    name.textContent = m.id;
-    const body = document.createElement('div');
-    body.className = 'mbody';
-    const title = document.createElement('div');
-    title.className = 'mname';
-    title.textContent = m.name;
-    const desc = document.createElement('div');
-    desc.className = 'mdesc';
-    desc.textContent = m.desc;
-    body.appendChild(title);
-    body.appendChild(desc);
-    const reward = document.createElement('div');
-    reward.className = done ? 'mdone' : 'mreward';
-    reward.textContent = done ? 'DONE ✓' : fmtMoney(m.reward);
-    row.appendChild(name);
-    row.appendChild(body);
-    row.appendChild(reward);
-    row.addEventListener('click', () => {
-      if (done) {
-        toast("Already done — the money's in your pocket.", '#7dff8a');
-        return;
-      }
-      if (G.mission.active) {
-        toast('Finish the current job first.', '#ff9a3d');
-        return;
-      }
-      G.startMission(m.id);
-      hideScreens();
-      G.resume();
-    });
-    list.appendChild(row);
-  }
+  for (const m of MISSIONS) list.appendChild(missionRow(G, m));
   show('mission-screen');
 }
 

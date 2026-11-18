@@ -1,7 +1,8 @@
 // Aurelia Nights — synthesized sound. No audio files are loaded: every
-// sound is built from oscillators and filtered noise through one master gain.
-// AudioContext is created lazily on the first user gesture (browser policy),
-// so constructing the game on the title screen stays silent.
+// sound is built from oscillators and filtered noise through one master
+// gain. The AudioContext is created lazily on the first user gesture
+// (browser policy), so constructing the game on the title screen stays
+// silent — nothing here can throw if audio is unavailable.
 let ctx = null;
 let master = null;
 let muted = false;
@@ -97,7 +98,8 @@ function noiseBuffer(dur) {
   return buf;
 }
 
-function blip(freq0, freq1, dur, type, vol) {
+// One short pitched blip, sweeping from freq0 to freq1.
+function tone(freq0, freq1, dur, type, vol) {
   if (!ctx || muted) return;
   const t = ctx.currentTime;
   const o = ctx.createOscillator();
@@ -113,59 +115,42 @@ function blip(freq0, freq1, dur, type, vol) {
   o.stop(t + dur + 0.02);
 }
 
-export function playGunshot() {
+// One burst of filtered noise (gunfire, crashes).
+function noiseBurst(dur, filterType, filterFreq, vol) {
   if (!ctx || muted) return;
   const src = ctx.createBufferSource();
-  src.buffer = noiseBuffer(0.14);
+  src.buffer = noiseBuffer(dur);
   const f = ctx.createBiquadFilter();
-  f.type = 'highpass';
-  f.frequency.value = 900;
+  f.type = filterType;
+  f.frequency.value = filterFreq;
   const g = ctx.createGain();
-  g.gain.value = 0.5;
+  g.gain.value = vol;
   src.connect(f);
   f.connect(g);
   g.connect(master);
   src.start();
-  blip(160, 45, 0.12, 'square', 0.28);
+}
+
+export function playGunshot() {
+  noiseBurst(0.14, 'highpass', 900, 0.5);
+  tone(160, 45, 0.12, 'square', 0.28);
 }
 
 export function playShotgun() {
-  if (!ctx || muted) return;
-  const src = ctx.createBufferSource();
-  src.buffer = noiseBuffer(0.28);
-  const f = ctx.createBiquadFilter();
-  f.type = 'lowpass';
-  f.frequency.value = 700;
-  const g = ctx.createGain();
-  g.gain.value = 0.7;
-  src.connect(f);
-  f.connect(g);
-  g.connect(master);
-  src.start();
-  blip(120, 35, 0.22, 'square', 0.35);
+  noiseBurst(0.28, 'lowpass', 700, 0.7);
+  tone(120, 35, 0.22, 'square', 0.35);
 }
 
 export function playCrash() {
-  if (!ctx || muted) return;
-  const src = ctx.createBufferSource();
-  src.buffer = noiseBuffer(0.22);
-  const f = ctx.createBiquadFilter();
-  f.type = 'lowpass';
-  f.frequency.value = 500;
-  const g = ctx.createGain();
-  g.gain.value = 0.55;
-  src.connect(f);
-  f.connect(g);
-  g.connect(master);
-  src.start();
+  noiseBurst(0.22, 'lowpass', 500, 0.55);
 }
 
 export function playPickup() {
-  blip(660, 990, 0.22, 'sine', 0.22);
+  tone(660, 990, 0.22, 'sine', 0.22);
 }
 
 export function playCash() {
-  blip(880, 1320, 0.18, 'triangle', 0.2);
+  tone(880, 1320, 0.18, 'triangle', 0.2);
 }
 
 export function playHorn() {
@@ -204,12 +189,15 @@ export function playMissionDone() {
 }
 
 export function playBusted() {
-  blip(392, 196, 0.7, 'sawtooth', 0.18);
+  tone(392, 196, 0.7, 'sawtooth', 0.18);
 }
 
-// Lo-fi bass loop: an A-minor walking line, one note every 0.42 s.
+// Lo-fi bass loop: a D-minor walking line, one note every 0.42 s.
+const BASS_STEP_MS = 420;
+const BASS_NOTES = [73.42, 73.42, 87.31, 65.41, 73.42, 73.42, 98, 87.31];
+
 function startBassLoop() {
-  const notes = [55, 55, 65.41, 49, 55, 55, 82.41, 73.42];
+  const notes = BASS_NOTES;
   bassTimer = setInterval(() => {
     if (!ctx || muted || ctx.state !== 'running') return;
     const f = notes[bassStep % notes.length];
@@ -226,5 +214,5 @@ function startBassLoop() {
     g.connect(master);
     o.start(t);
     o.stop(t + 0.42);
-  }, 420);
+  }, BASS_STEP_MS);
 }

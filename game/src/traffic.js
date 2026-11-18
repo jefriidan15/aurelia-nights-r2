@@ -2,17 +2,14 @@
 // sidewalks and flee gunfire, and the cash pickups scattered around the
 // city (dropped money, $25–$75 each — free-roam income between jobs).
 import { clamp, dist, rand, pick } from './util.js';
-import { AVENUES, STREETS, ROAD_HALF, WORLD_W, WORLD_H, isWater, collideBuildings } from './world.js';
+import { AVENUES, STREETS, ROAD_HALF, WORLD_W, WORLD_H, isWater, pushOutOfBuildings } from './world.js';
 import { makeCar } from './player.js';
 
 const PED_SKINS = ['#e8c39a', '#c98d5f', '#8a5a3b', '#f0d0b0', '#6b4a2f', '#d9a06a'];
 const PED_SHIRTS = ['#d23b3b', '#3b7dd2', '#3bd2a0', '#d2a93b', '#e8e8e8', '#7a4a9a', '#2b8a6a', '#c96a2b'];
 
-export function spawnTraffic(G, n) {
-  for (let i = 0; i < n; i++) {
-    const car = makeTrafficCar();
-    G.cars.push(car);
-  }
+export function spawnTrafficCars(G, n) {
+  for (let i = 0; i < n; i++) G.cars.push(makeTrafficCar());
 }
 
 export function makeTrafficCar() {
@@ -31,7 +28,7 @@ export function makeTrafficCar() {
   return car;
 }
 
-export function spawnPedestrians(G, n) {
+export function spawnWalkers(G, n) {
   for (let i = 0; i < n; i++) {
     const vertical = Math.random() < 0.5;
     const road = vertical ? pick(AVENUES) : pick(STREETS);
@@ -51,7 +48,7 @@ export function spawnPedestrians(G, n) {
   }
 }
 
-export function spawnPickups(G, n) {
+export function spawnCash(G, n) {
   G.pickups = [];
   for (let i = 0; i < n; i++) {
     const vertical = Math.random() < 0.5;
@@ -68,44 +65,43 @@ export function spawnPickups(G, n) {
   }
 }
 
-function nearestCross(x, y, vertical) {
-  if (vertical) {
-    let best = STREETS[0];
-    let bd = Infinity;
-    for (const s of STREETS) {
-      const d = Math.abs(s - y);
-      if (d < bd) { bd = d; best = s; }
-    }
-    return best;
-  }
-  let best = AVENUES[0];
+// The street that crosses the car's current road, nearest to the car.
+function crossingStreet(x, y, vertical) {
+  const list = vertical ? STREETS : AVENUES;
+  const pos = vertical ? y : x;
+  let best = list[0];
   let bd = Infinity;
-  for (const a of AVENUES) {
-    const d = Math.abs(a - x);
-    if (d < bd) { bd = d; best = a; }
+  for (const s of list) {
+    const d = Math.abs(s - pos);
+    if (d < bd) { bd = d; best = s; }
   }
   return best;
 }
 
-export function updateTraffic(G, dt) {
+// Move a far-away traffic car onto a road near the player, with a fresh
+// heading and speed, so the streets around the player always feel alive.
+function recycleCar(G, car) {
+  const p = G.player;
+  const fresh = makeTrafficCar();
+  car.x = clamp(p.x + rand(-600, 600), 150, WORLD_W - 150);
+  car.y = clamp(p.y + rand(-500, 500), 150, WORLD_H - 150);
+  car.angle = fresh.angle;
+  car.vertical = fresh.vertical;
+  car.speed = fresh.speed;
+}
+
+export function updateCars(G, dt) {
   const p = G.player;
   for (const car of G.cars) {
     if (car.dead || car === p.car || !car.traffic) continue;
     const d = dist(car.x, car.y, p.x, p.y);
     if (d > 1400) {
       // Recycle far cars onto a road near the player.
-      const fresh = makeTrafficCar();
-      fresh.x = clamp(p.x + rand(-600, 600), 150, WORLD_W - 150);
-      fresh.y = clamp(p.y + rand(-500, 500), 150, WORLD_H - 150);
-      car.x = fresh.x;
-      car.y = fresh.y;
-      car.angle = fresh.angle;
-      car.vertical = fresh.vertical;
-      car.speed = fresh.speed;
+      recycleCar(G, car);
       continue;
     }
     // At an intersection, sometimes turn onto the cross road.
-    const cross = nearestCross(car.x, car.y, car.vertical);
+    const cross = crossingStreet(car.x, car.y, car.vertical);
     const onCross = car.vertical ? Math.abs(car.y - cross) < 14 : Math.abs(car.x - cross) < 14;
     if (onCross && Math.random() < dt * 0.25) {
       car.vertical = !car.vertical;
@@ -131,11 +127,11 @@ export function updateTraffic(G, dt) {
     if (car.x < 60 || car.x > WORLD_W - 60 || car.y < 60 || car.y > WORLD_H - 60) {
       car.angle += Math.PI; // turn around at the map edge
     }
-    collideBuildings(G.buildings, car, 24);
+    pushOutOfBuildings(G.buildings, car, 24);
   }
 }
 
-export function updatePedestrians(G, dt) {
+export function updateWalkers(G, dt) {
   const p = G.player;
   const gunfire = G.gunfireTimer > 0;
   for (const ped of G.peds) {
@@ -164,11 +160,11 @@ export function updatePedestrians(G, dt) {
     ped.x = clamp(ped.x, 30, WORLD_W - 30);
     ped.y = clamp(ped.y, 30, WORLD_H - 30);
     if (isWater(ped.x, ped.y)) ped.y = 2430;
-    collideBuildings(G.buildings, ped, 10);
+    pushOutOfBuildings(G.buildings, ped, 10);
   }
 }
 
-export function updatePickups(G, dt) {
+export function updateCash(G, dt) {
   const p = G.player;
   for (const pk of G.pickups) {
     if (pk.taken) continue;

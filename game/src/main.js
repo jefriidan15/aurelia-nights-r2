@@ -4,15 +4,15 @@
 // ?shot=start|play|chase|docks|night stages a real in-game scene instead of
 // the loop and sets window.__shotReady once it is painted (screenshots).
 import { clamp, dist, rand } from './util.js';
-import { buildCity, SHOPS, LANDMARKS, WORLD_W, WORLD_H } from './world.js';
+import { buildCity, SHOPS, LANDMARKS, SHOP_RANGE } from './world.js';
 import { keys, pressed, mouse, initInput, endFrame, setKey, setMouse } from './input.js';
 import * as audio from './audio.js';
-import { makePlayer, makeCar, spawnParkedCar, updatePlayer, enterCar, exitCar, nearestCar, WEAPONS } from './player.js';
-import { spawnTraffic, spawnPedestrians, spawnPickups, updateTraffic, updatePedestrians, updatePickups } from './traffic.js';
-import { updatePolice, updateHeat, wantedFromHeat } from './police.js';
-import { updatePlayerShooting, updateBullets, updateGuards } from './combat.js';
+import { makePlayer, makeCar, spawnParkedCar, updatePlayer, enterCar, exitCar, closestCar } from './player.js';
+import { spawnTrafficCars, spawnWalkers, spawnCash, updateCars, updateWalkers, updateCash } from './traffic.js';
+import { updateCops, updateWanted, starsForHeat } from './police.js';
+import { updateShooting, updateBullets, updateGuards, BULLET_LIFE } from './combat.js';
 import { freshMissionState, startMission as missionStart, abortMission, updateMission } from './missions.js';
-import { saveGame, loadSave, applySave, hasSave } from './save.js';
+import { saveGame, loadSave, applySave } from './save.js';
 import { render } from './render.js';
 import { initUI, updateHUD } from './ui.js';
 
@@ -21,93 +21,152 @@ const ctx = canvas.getContext('2d');
 const minimapCanvas = document.getElementById('minimap');
 const minimapCtx = minimapCanvas.getContext('2d');
 
-const G = {
-  ctx, minimapCtx,
-  view: { w: 1280, h: 720 },
-  camera: { x: 700, y: 1000, zoom: 1 },
-  input: { keys, pressed, mouse },
-  audio,
-  state: 'title', // title | playing | paused | missions | busted | win
-  time: 0,
-  clock: 8 * 3600,
-  heat: 0,
-  wanted: 0,
-  lastCrimeT: -999,
-  copSpawnT: 0,
-  gunfireTimer: 0,
-  buildings: buildCity(),
-  cars: [],
-  peds: [],
-  cops: [],
-  guards: [],
-  bullets: [],
-  particles: [],
-  pickups: [],
-  pickupsTaken: 0,
-  muzzle: null,
-  mission: freshMissionState(),
-  completed: {},
-  allDone: false,
-  player: makePlayer(LANDMARKS.playerSpawn.x, LANDMARKS.playerSpawn.y),
-  fps: 0,
-  frames: 0,
-  fpsT: 0,
-};
+// ---- state ----
 
-// ---- state helpers attached to G (used by the other modules) ----
-G.setObjective = (t, x) => { if (G.ui) G.ui.setObjective(t, x); };
-G.toast = (m, c) => { if (G.ui) G.ui.toast(m, c); };
-G.centerMsg = (m, s) => { if (G.ui) G.ui.centerMsg(m, s); };
-G.addWanted = (heat, why) => {
-  G.heat = clamp(G.heat + heat, 0, 130);
-  G.lastCrimeT = G.time;
-  G.wanted = wantedFromHeat(G.heat);
-  void why;
-};
-G.setHeat = (heat, lock) => {
-  G.heat = heat;
-  G.wanted = wantedFromHeat(heat);
-  G.mission.heatLock = !!lock;
-  G.lastCrimeT = G.time;
-};
-G.fireBullet = (x, y, angle, speed, owner) => {
-  G.bullets.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, owner, life: 1.1 });
-  G.muzzle = { x, y, t: 0.06 };
-};
-G.onGuardKilled = (g) => {
-  G.mission.kills++;
-  G.addWanted(25, 'killed a guard');
-  burst(g.x, g.y, '#ff3b3b', 14);
-  G.toast('Guard down.', '#ff9a3d');
-};
-G.onCopDestroyed = (cop) => {
-  G.cops.splice(G.cops.indexOf(cop), 1);
-  const ci = G.cars.indexOf(cop);
-  if (ci >= 0) G.cars.splice(ci, 1);
-  cop.dead = true;
-  burst(cop.x, cop.y, '#ffb52e', 26);
-  G.addWanted(40, 'destroyed a cruiser');
-  G.toast('Cruiser destroyed! +heat', '#ff5b5b');
-};
-G.carDestroyed = (car) => {
-  car.dead = true;
-  burst(car.x, car.y, '#ff7b39', 30);
-  audio.playCrash();
-  if (G.player.car === car) {
-    G.player.car = null;
-    G.player.onFoot = true;
-    G.player.health = Math.max(10, G.player.health - 25);
-  }
-  G.toast('Your car is wrecked!', '#ff5b5b');
-};
-G.save = () => saveGame(G);
-G.startMission = (id) => missionStart(G, id);
-G.closeMissions = () => {
-  G.state = 'playing';
-  G.ui.hideScreens();
-};
+function createGame() {
+  const G = {
+    ctx, minimapCtx,
+    view: { w: 1280, h: 720 },
+    camera: { x: 700, y: 1000, zoom: 1 },
+    input: { keys, pressed, mouse },
+    audio,
+    state: 'title', // title | playing | paused | missions | busted | win
+    time: 0,
+    clock: 8 * 3600,
+    heat: 0,
+    wanted: 0,
+    lastCrimeT: -999,
+    copSpawnT: 0,
+    gunfireTimer: 0,
+    buildings: buildCity(),
+    cars: [],
+    peds: [],
+    cops: [],
+    guards: [],
+    bullets: [],
+    particles: [],
+    pickups: [],
+    pickupsTaken: 0,
+    muzzle: null,
+    mission: freshMissionState(),
+    completed: {},
+    allDone: false,
+    player: makePlayer(LANDMARKS.playerSpawn.x, LANDMARKS.playerSpawn.y),
+    fps: 0,
+    frames: 0,
+    fpsT: 0,
+  };
+  attachHelpers(G);
+  return G;
+}
 
-function burst(x, y, color, n) {
+function attachHelpers(G) {
+  G.setObjective = (t, x) => { if (G.ui) G.ui.setObjective(t, x); };
+  G.toast = (m, c) => { if (G.ui) G.ui.toast(m, c); };
+  G.centerMsg = (m, s) => { if (G.ui) G.ui.centerMsg(m, s); };
+  G.addWanted = (heat, why) => {
+    G.heat = clamp(G.heat + heat, 0, 130);
+    G.lastCrimeT = G.time;
+    G.wanted = starsForHeat(G.heat);
+    void why;
+  };
+  G.setHeat = (heat, lock) => {
+    G.heat = heat;
+    G.wanted = starsForHeat(heat);
+    G.mission.heatLock = !!lock;
+    G.lastCrimeT = G.time;
+  };
+  G.fireBullet = (x, y, angle, speed, owner) => {
+    G.bullets.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, owner, life: BULLET_LIFE });
+    G.muzzle = { x, y, t: 0.06 };
+  };
+  G.onGuardKilled = (g) => {
+    G.mission.kills++;
+    G.addWanted(25, 'killed a guard');
+    burst(G, g.x, g.y, '#ff3b3b', 14);
+    G.toast('Guard down.', '#ff9a3d');
+  };
+  G.onCopDestroyed = (cop) => {
+    G.cops.splice(G.cops.indexOf(cop), 1);
+    const ci = G.cars.indexOf(cop);
+    if (ci >= 0) G.cars.splice(ci, 1);
+    cop.dead = true;
+    burst(G, cop.x, cop.y, '#ffb52e', 26);
+    G.addWanted(40, 'destroyed a cruiser');
+    G.toast('Cruiser destroyed! +heat', '#ff5b5b');
+  };
+  G.carDestroyed = (car) => {
+    car.dead = true;
+    burst(G, car.x, car.y, '#ff7b39', 30);
+    audio.playCrash();
+    if (G.player.car === car) {
+      G.player.car = null;
+      G.player.onFoot = true;
+      G.player.health = Math.max(10, G.player.health - 25);
+    }
+    G.toast('Your car is wrecked!', '#ff5b5b');
+  };
+  G.save = () => saveGame(G);
+  G.startMission = (id) => missionStart(G, id);
+  G.closeMissions = () => {
+    G.state = 'playing';
+    G.ui.hideScreens();
+  };
+  G.newGame = () => {
+    resetWorld(G);
+    G.state = 'playing';
+    G.ui.hideScreens();
+    G.setObjective('FREE ROAM', 'Explore Port Aurelia. Press M for missions.');
+    G.centerMsg('WELCOME TO PORT AURELIA', 3);
+  };
+  G.continueGame = () => {
+    const d = loadSave();
+    resetWorld(G);
+    if (d) applySave(G, d);
+    G.state = 'playing';
+    G.ui.hideScreens();
+    G.setObjective('FREE ROAM', 'Welcome back. Press M for missions.');
+    G.centerMsg('WELCOME BACK, AURELIA', 2.5);
+  };
+  G.quitToTitle = () => {
+    G.state = 'title';
+    G.ui.showTitle();
+  };
+  G.resume = () => {
+    if (G.state === 'paused' || G.state === 'missions' || G.state === 'win') {
+      G.state = 'playing';
+      G.ui.hideScreens();
+    }
+  };
+  G.busted = (cause) => {
+    if (G.state !== 'playing') return;
+    abortMission(G);
+    G.state = 'busted';
+    const fine = Math.min(G.player.money, 150);
+    G.player.money -= fine;
+    audio.playBusted();
+    G.ui.showEnd('BUSTED', 'The Port Aurelia PD picked you up (' + cause + '). Fine: $' + fine + '. You wake up at St. Aurelia General.');
+  };
+  G.respawn = () => {
+    const p = G.player;
+    p.health = 100;
+    p.x = LANDMARKS.hospitalSpawn.x;
+    p.y = LANDMARKS.hospitalSpawn.y;
+    p.onFoot = true;
+    p.car = null;
+    G.heat = 0;
+    G.wanted = 0;
+    G.cops = [];
+    G.cars = G.cars.filter((c) => !c.isCop);
+    G.state = 'playing';
+    G.ui.hideScreens();
+    G.setObjective('FREE ROAM', 'Back on your feet. Press M for missions.');
+  };
+}
+
+const G = createGame();
+
+function burst(G, x, y, color, n) {
   for (let i = 0; i < n; i++) {
     const a = rand(0, Math.PI * 2);
     const s = rand(40, 220);
@@ -115,7 +174,7 @@ function burst(x, y, color, n) {
   }
 }
 
-function resetWorld() {
+function resetWorld(G) {
   G.cars = [];
   G.peds = [];
   G.cops = [];
@@ -134,9 +193,9 @@ function resetWorld() {
   G.time = 0;
   G.clock = 8 * 3600;
   G.player = makePlayer(LANDMARKS.playerSpawn.x, LANDMARKS.playerSpawn.y);
-  spawnTraffic(G, 14);
-  spawnPedestrians(G, 26);
-  spawnPickups(G, 12);
+  spawnTrafficCars(G, 16);
+  spawnWalkers(G, 30);
+  spawnCash(G, 14);
   // Parked cars worth stealing, scattered on the grid.
   const spots = [
     [700, 300], [1100, 650], [1500, 1000], [2300, 650], [2700, 1350],
@@ -147,61 +206,11 @@ function resetWorld() {
   }
 }
 
-G.newGame = () => {
-  resetWorld();
-  G.state = 'playing';
-  G.ui.hideScreens();
-  G.setObjective('FREE ROAM', 'Explore Port Aurelia. Press M for missions.');
-  G.centerMsg('WELCOME TO PORT AURELIA', 3);
-};
-G.continueGame = () => {
-  const d = loadSave();
-  resetWorld();
-  if (d) applySave(G, d);
-  G.state = 'playing';
-  G.ui.hideScreens();
-  G.setObjective('FREE ROAM', 'Welcome back. Press M for missions.');
-  G.centerMsg('WELCOME BACK, AURELIA', 2.5);
-};
-G.quitToTitle = () => {
-  G.state = 'title';
-  G.ui.showTitle();
-};
-G.resume = () => {
-  if (G.state === 'paused' || G.state === 'missions' || G.state === 'win') {
-    G.state = 'playing';
-    G.ui.hideScreens();
-  }
-};
-G.busted = (cause) => {
-  if (G.state !== 'playing') return;
-  abortMission(G);
-  G.state = 'busted';
-  const fine = Math.min(G.player.money, 150);
-  G.player.money -= fine;
-  audio.playBusted();
-  G.ui.showEnd('BUSTED', 'The Port Aurelia PD picked you up (' + cause + '). Fine: $' + fine + '. You wake up at St. Aurelia General.');
-};
-G.respawn = () => {
-  const p = G.player;
-  p.health = 100;
-  p.x = LANDMARKS.hospitalSpawn.x;
-  p.y = LANDMARKS.hospitalSpawn.y;
-  p.onFoot = true;
-  p.car = null;
-  G.heat = 0;
-  G.wanted = 0;
-  G.cops = [];
-  G.cars = G.cars.filter((c) => !c.isCop);
-  G.state = 'playing';
-  G.ui.hideScreens();
-  G.setObjective('FREE ROAM', 'Back on your feet. Press M for missions.');
-};
-
 // ---- shops ----
-function nearestShop() {
+
+function nearestShop(G) {
   let best = null;
-  let bd = 80;
+  let bd = SHOP_RANGE;
   for (const s of SHOPS) {
     const d = dist(G.player.x, G.player.y, s.x, s.y);
     if (d < bd) {
@@ -212,93 +221,85 @@ function nearestShop() {
   return best;
 }
 
-function useShop(shop) {
+function useShop(G, shop) {
   const p = G.player;
-  switch (shop.kind) {
-    case 'spray': {
-      if (p.money < shop.price) { G.toast('Need $100 for a paint job.', '#ff9a3d'); return; }
-      if (G.wanted === 0 && (!p.car || p.car.hp >= p.car.maxHp)) { G.toast("You're already clean.", '#7dff8a'); return; }
-      p.money -= shop.price;
-      G.heat = 0;
-      G.wanted = 0;
-      if (p.car) p.car.hp = p.car.maxHp;
-      G.toast('Fresh paint — wanted level wiped, car repaired.', '#7dff8a');
-      break;
+  if (shop.kind === 'spray') {
+    if (p.money < shop.price) { G.toast('Need $100 for a paint job.', '#ff9a3d'); return; }
+    if (G.wanted === 0 && (!p.car || p.car.hp >= p.car.maxHp)) { G.toast("You're already clean.", '#7dff8a'); return; }
+    p.money -= shop.price;
+    G.heat = 0;
+    G.wanted = 0;
+    if (p.car) p.car.hp = p.car.maxHp;
+    G.toast('Fresh paint — wanted level wiped, car repaired.', '#7dff8a');
+  } else if (shop.kind === 'gun') {
+    if (p.weapon === 'none') {
+      if (p.money < 150) { G.toast('A pistol costs $150.', '#ff9a3d'); return; }
+      p.money -= 150;
+      p.weapon = 'pistol';
+      p.hasGun = true;
+      p.ammo = 24;
+      G.toast('Pistol bought — 24 rounds in the mag.', '#7dff8a');
+    } else if (p.weapon === 'pistol') {
+      if (p.money < 400) { G.toast('A shotgun costs $400 (or $25 for ammo).', '#ff9a3d'); return; }
+      p.money -= 400;
+      p.weapon = 'shotgun';
+      p.ammo = 12;
+      G.toast('Shotgun bought — 12 shells. Close range, big mess.', '#7dff8a');
+    } else {
+      if (p.money < 25) { G.toast('Ammo is $25 a box.', '#ff9a3d'); return; }
+      p.money -= 25;
+      p.ammo += 12;
+      G.toast('+12 shells. Stay dangerous.', '#7dff8a');
     }
-    case 'gun': {
-      if (p.weapon === 'none') {
-        if (p.money < 150) { G.toast('A pistol costs $150.', '#ff9a3d'); return; }
-        p.money -= 150;
-        p.weapon = 'pistol';
-        p.hasGun = true;
-        p.ammo = 24;
-        G.toast('Pistol bought — 24 rounds in the mag.', '#7dff8a');
-      } else if (p.weapon === 'pistol') {
-        if (p.money < 400) { G.toast('A shotgun costs $400 (or $25 for pistol ammo).', '#ff9a3d'); return; }
-        p.money -= 400;
-        p.weapon = 'shotgun';
-        p.ammo = 12;
-        G.toast('Shotgun bought — 12 shells. Close range, big mess.', '#7dff8a');
-      } else {
-        if (p.money < 25) { G.toast('Ammo is $25 a box.', '#ff9a3d'); return; }
-        p.money -= 25;
-        p.ammo += 12;
-        G.toast('+12 shells. Stay dangerous.', '#7dff8a');
-      }
-      break;
-    }
-    case 'diner':
-      if (p.health >= 100) { G.toast("You're full up.", '#7dff8a'); return; }
-      if (p.money < 20) { G.toast('A meal costs $20.', '#ff9a3d'); return; }
-      p.money -= 20;
-      p.health = clamp(p.health + 40, 0, 100);
-      G.toast('Hot meal — +40 HP.', '#7dff8a');
-      break;
-    case 'hospital':
-      if (p.health >= 100) { G.toast("You're already at full health.", '#7dff8a'); return; }
-      if (p.money < 200) { G.toast('Full treatment costs $200.', '#ff9a3d'); return; }
-      p.money -= 200;
-      p.health = 100;
-      G.toast('Patched up — full health.', '#7dff8a');
-      break;
-    case 'safehouse':
-      if (G.save()) G.toast('Game saved at the safehouse.', '#7dff8a');
-      else G.toast('Save failed.', '#ff5b5b');
-      break;
+  } else if (shop.kind === 'diner') {
+    if (p.health >= 100) { G.toast("You're full up.", '#7dff8a'); return; }
+    if (p.money < 20) { G.toast('A meal costs $20.', '#ff9a3d'); return; }
+    p.money -= 20;
+    p.health = clamp(p.health + 40, 0, 100);
+    G.toast('Hot meal — +40 HP.', '#7dff8a');
+  } else if (shop.kind === 'hospital') {
+    if (p.health >= 100) { G.toast("You're already at full health.", '#7dff8a'); return; }
+    if (p.money < 200) { G.toast('Full treatment costs $200.', '#ff9a3d'); return; }
+    p.money -= 200;
+    p.health = 100;
+    G.toast('Patched up — full health.', '#7dff8a');
+  } else if (shop.kind === 'safehouse') {
+    if (G.save()) G.toast('Game saved at the safehouse.', '#7dff8a');
+    else G.toast('Save failed.', '#ff5b5b');
   }
   audio.playPickup();
 }
 
 // ---- interaction ----
-function handleInteract() {
+
+function handleInteract(G) {
   const p = G.player;
   if (!p.onFoot) {
     exitCar(G);
     return;
   }
-  const shop = nearestShop();
+  const shop = nearestShop(G);
   if (shop) {
-    useShop(shop);
+    useShop(G, shop);
     return;
   }
-  const car = nearestCar(G, 64);
-  if (car) {
-    enterCar(G, car);
-  }
+  const car = closestCar(G, 64);
+  if (car) enterCar(G, car);
 }
 
-function interactionPrompt() {
+function interactionPrompt(G) {
   const p = G.player;
   if (!p.onFoot) return '[E] Exit car';
-  const shop = nearestShop();
+  const shop = nearestShop(G);
   if (shop) return '[E] ' + shop.name + ' — ' + shop.desc;
-  const car = nearestCar(G, 64);
+  const car = closestCar(G, 64);
   if (car) return '[E] Steal the ' + car.name + ' (' + car.color + ')';
   return '';
 }
 
 // ---- one simulation step (shared by the live loop and shot staging) ----
-function stepWorld(dt) {
+
+function stepWorld(G, dt) {
   G.time += dt;
   G.clock += dt * 60; // 1 real second = 1 game minute
   G.gunfireTimer = Math.max(0, G.gunfireTimer - dt);
@@ -307,12 +308,12 @@ function stepWorld(dt) {
     if (G.muzzle.t <= 0) G.muzzle = null;
   }
   updatePlayer(G, dt);
-  updatePlayerShooting(G, dt);
-  updateTraffic(G, dt);
-  updatePedestrians(G, dt);
-  updatePickups(G, dt);
-  updatePolice(G, dt);
-  updateHeat(G, dt);
+  updateShooting(G, dt);
+  updateCars(G, dt);
+  updateWalkers(G, dt);
+  updateCash(G, dt);
+  updateCops(G, dt);
+  updateWanted(G, dt);
   updateBullets(G, dt);
   updateGuards(G, dt);
   updateMission(G, dt);
@@ -331,17 +332,18 @@ function stepWorld(dt) {
   G.camera.y += (p.y - G.camera.y) * Math.min(1, dt * 6);
 }
 
-function stepFrame(dt) {
-  stepWorld(dt);
+function stepFrame(G, dt) {
+  stepWorld(G, dt);
   const p = G.player;
   const driving = !p.onFoot && p.car;
   audio.setEngine(driving ? Math.abs(p.speed || 0) / 560 : 0, !!driving);
   audio.setSiren(G.wanted > 0 && G.cops.length > 0);
-  G.ui.setPrompt(interactionPrompt());
+  G.ui.setPrompt(interactionPrompt(G));
   updateHUD(G);
 }
 
 // ---- main loop ----
+
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
@@ -367,9 +369,9 @@ function frame(now) {
       G.state = 'missions';
       G.ui.showMissions(G);
     } else if (pressed.interact) {
-      handleInteract();
+      handleInteract(G);
     } else {
-      stepFrame(dt);
+      stepFrame(G, dt);
     }
   } else if (G.state === 'paused' && pressed.pause) {
     G.resume();
@@ -383,11 +385,12 @@ function frame(now) {
 }
 
 // ---- screenshot staging (?shot=...) ----
+
 function stageShot(name) {
   const STEP = 1 / 60;
   const driveFor = (seconds) => {
     setKey('up', true);
-    for (let i = 0; i < seconds / STEP; i++) stepWorld(STEP);
+    for (let i = 0; i < seconds / STEP; i++) stepWorld(G, STEP);
     setKey('up', false);
   };
   const putInCar = (x, y) => {
@@ -430,7 +433,7 @@ function stageShot(name) {
     G.player.y = LANDMARKS.docks.y - 120;
     G.camera.x = G.player.x;
     G.camera.y = G.player.y;
-    for (let i = 0; i < 2 / STEP; i++) stepWorld(STEP);
+    for (let i = 0; i < 2 / STEP; i++) stepWorld(G, STEP);
     G.camera.x = G.player.x;
     G.camera.y = G.player.y;
     render(G);
@@ -459,7 +462,8 @@ function stageShot(name) {
 }
 
 // ---- boot ----
-resetWorld();
+
+resetWorld(G);
 initInput(canvas);
 initUI(G);
 G.ui.showTitle();
@@ -483,10 +487,10 @@ if (shot) {
 // Test / debug hooks (harmless in normal play, used by automated playtests).
 window.AURELIA = {
   G,
-  version: '4.0.0-round4',
+  version: '5.0.0-round5',
   newGame: () => G.newGame(),
   startMission: (id) => G.startMission(id),
-  step: (dt) => { if (G.state === 'playing') stepFrame(dt || 1 / 60); },
+  step: (dt) => { if (G.state === 'playing') stepFrame(G, dt || 1 / 60); },
   teleport: (x, y) => {
     G.player.x = x;
     G.player.y = y;

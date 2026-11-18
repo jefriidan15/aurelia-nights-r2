@@ -1,51 +1,67 @@
-// Aurelia Nights — shared math and formatting helpers. No dependencies,
-// no DOM, no state: every other module imports from here.
+// Aurelia Nights — small shared helpers for the whole game.
+// Pure functions only: no DOM, no game state, no imports. Every other
+// module builds on these for angles, randomness and formatting.
 export const TAU = Math.PI * 2;
 
 export function clamp(v, lo, hi) {
-  return v < lo ? lo : v > hi ? hi : v;
+  if (v < lo) return lo;
+  if (v > hi) return hi;
+  return v;
 }
 
 export function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
+// Blend two headings along the shortest arc.
+export function angleLerp(a, b, t) {
+  return a + angleDiff(a, b) * t;
+}
+
 export function dist(ax, ay, bx, by) {
-  return Math.hypot(bx - ax, by - ay);
+  const dx = bx - ax;
+  const dy = by - ay;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 export function angleTo(ax, ay, bx, by) {
   return Math.atan2(by - ay, bx - ax);
 }
 
-// Shortest signed turn from angle a toward angle b, in (-PI, PI].
+// Signed turn from a toward b, always in (-PI, PI].
 export function angleDiff(a, b) {
-  let d = b - a;
-  while (d > Math.PI) d -= TAU;
-  while (d <= -Math.PI) d += TAU;
-  return d;
+  return Math.atan2(Math.sin(b - a), Math.cos(b - a));
+}
+
+// Wrap any angle into (-PI, PI].
+export function clampAngle(a) {
+  return Math.atan2(Math.sin(a), Math.cos(a));
 }
 
 export function rand(a, b) {
   return a + Math.random() * (b - a);
 }
 
-export function randi(a, b) {
+export function randInt(a, b) {
   return Math.floor(rand(a, b + 1));
 }
 
-export function pick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
+export function randSign() {
+  return Math.random() < 0.5 ? -1 : 1;
 }
 
-export function choiceWeighted(pairs) {
-  // pairs: [[value, weight], ...]; returns a value.
+export function pick(arr) {
+  return arr[(Math.random() * arr.length) | 0];
+}
+
+// pairs: [[value, weight], ...] — roll once, return a value.
+export function weightedPick(pairs) {
   let total = 0;
-  for (const [, w] of pairs) total += w;
+  for (const pair of pairs) total += pair[1];
   let roll = Math.random() * total;
-  for (const [v, w] of pairs) {
-    roll -= w;
-    if (roll <= 0) return v;
+  for (const pair of pairs) {
+    roll -= pair[1];
+    if (roll <= 0) return pair[0];
   }
   return pairs[pairs.length - 1][0];
 }
@@ -54,6 +70,7 @@ export function fmtMoney(n) {
   return '$' + Math.round(n).toLocaleString('en-US');
 }
 
+// Seconds of game time -> "HH:MM" on a 24h clock.
 export function fmtClock(seconds) {
   const s = ((Math.floor(seconds) % 86400) + 86400) % 86400;
   const h = Math.floor(s / 3600);
@@ -61,18 +78,19 @@ export function fmtClock(seconds) {
   return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 }
 
+// Seconds -> "M:SS" countdown.
 export function fmtTime(seconds) {
   const s = Math.max(0, Math.ceil(seconds));
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
 
-// Deterministic 0..1 hash of integer grid coords — stable building colours
-// and per-block variation that never changes between loads.
+// Deterministic 0..1 hash of a pair of integers — stable per-block variety
+// (building colours, trees, lit windows) that never changes between loads.
 export function hash2(x, y) {
-  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
-  h = (h ^ (h >>> 13)) | 0;
-  h = Math.imul(h, 1274126177);
-  return (((h ^ (h >>> 16)) >>> 0) % 1000) / 1000;
+  let h = (Math.imul(x | 0, 2246822519) ^ Math.imul(y | 0, 3266489917)) | 0;
+  h = Math.imul(h ^ (h >>> 15), 3266489917);
+  h ^= h >>> 13;
+  return ((h >>> 0) % 1000) / 1000;
 }
 
 export function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {

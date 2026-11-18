@@ -1,12 +1,14 @@
 // Aurelia Nights — localStorage save. One slot, versioned, plain JSON.
-// Nothing here ever touches the network; a blocked storage just fails soft.
-export const SAVE_KEY = 'aurelia-nights-save-v2';
+// Nothing here ever touches the network; blocked storage just fails soft
+// and the game carries on without a save.
+export const SAVE_KEY = 'aurelia-nights-save-v3';
+export const SAVE_VERSION = 3;
 
 export function saveGame(G) {
   try {
     const p = G.player;
     const data = {
-      v: 2,
+      v: SAVE_VERSION,
       savedAt: Date.now(),
       money: p.money,
       health: p.health,
@@ -33,7 +35,8 @@ export function loadSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const d = JSON.parse(raw);
-    if (!d || (d.v !== 1 && d.v !== 2)) return null;
+    if (!d || typeof d !== 'object') return null;
+    if (d.v !== SAVE_VERSION && d.v !== 2 && d.v !== 1) return null;
     return d;
   } catch (e) {
     return null;
@@ -63,6 +66,17 @@ export function applySave(G, d) {
 
 export function hasSave() {
   return loadSave() !== null;
+}
+
+// Small summary for the title screen ("$250, 2/6 jobs done, saved ...").
+export function saveSummary() {
+  const d = loadSave();
+  if (!d) return null;
+  return {
+    money: d.money ?? 0,
+    jobs: Object.values(d.completed || {}).filter(Boolean).length,
+    savedAt: d.savedAt,
+  };
 }
 
 export function clearSave() {
