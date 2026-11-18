@@ -1,7 +1,11 @@
 # Aurelia Nights — Port Aurelia
 
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+
 A top-down 2D open-world crime game set in **Port Aurelia**, a 3600×2600
-sun-soaked harbour city. Built for the make.fun **gta6-01** bounty.
+sun-soaked harbour city. Built for the [make.fun **gta6-01** bounty](https://make.fun/bounty/gta6-01).
 Static files only — no build step, no network, no third-party assets.
 
 ## Play
