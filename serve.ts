@@ -1,8 +1,7 @@
-// A tiny static server for game/ (Node 22+, standard library only), so an
-// entry can be played locally without a build step: `node serve.ts` serves
-// game/ on http://localhost:8080. It sends the MIME types a browser game
-// needs, refuses any path outside game/, and otherwise does nothing clever:
-// this is a development convenience, not a web server for the internet.
+// A tiny static server for game/ (Node 22, standard library only), so an entry can be played
+// locally without a build step: `node serve.ts` serves game/ on http://localhost:8080.
+// It sends the MIME types a browser game needs, refuses any path outside game/, and otherwise
+// does nothing clever: this is a development convenience, not a web server for the internet.
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -14,7 +13,7 @@ const portIndex = args.indexOf('--port');
 const requested = portIndex === -1 ? 8080 : Number(args[portIndex + 1]);
 const port = Number.isInteger(requested) && requested > 0 && requested < 65536 ? requested : 8080;
 
-const MIME = {
+const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
@@ -38,32 +37,28 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-function sendError(response, code, message) {
-  response.writeHead(code).end(message);
-}
-
-function serveFile(request, response) {
+createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost');
-  let pathname;
+  let pathname: string;
   try {
     pathname = decodeURIComponent(url.pathname);
   } catch {
-    sendError(response, 400, 'bad request');
+    response.writeHead(400).end('bad request');
     return;
   }
   if (pathname.endsWith('/')) pathname += 'index.html';
   const file = resolve(join(root, normalize(pathname)));
   if (file !== root && !file.startsWith(root + sep)) {
-    sendError(response, 403, 'forbidden');
+    response.writeHead(403).end('forbidden');
     return;
   }
-  let size;
+  let size: number;
   try {
     const stats = statSync(file);
     if (!stats.isFile()) throw new Error('not a file');
     size = stats.size;
   } catch {
-    sendError(response, 404, 'not found');
+    response.writeHead(404).end('not found');
     return;
   }
   response.writeHead(200, {
@@ -72,8 +67,6 @@ function serveFile(request, response) {
     'cache-control': 'no-store',
   });
   createReadStream(file).pipe(response);
-}
-
-createServer(serveFile).listen(port, '127.0.0.1', () => {
+}).listen(port, '127.0.0.1', () => {
   console.log(`game/ is on http://localhost:${port}`);
 });

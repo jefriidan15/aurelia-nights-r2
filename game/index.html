@@ -3,94 +3,128 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Aurelia Nights — a top-down 2D open-world crime game set in Port Aurelia. Six jobs, five stars, one harbour city.">
 <title>Aurelia Nights — Port Aurelia</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="game-root">
-  <canvas id="game" width="1280" height="720"></canvas>
-  <canvas id="minimap" width="220" height="160"></canvas>
+<canvas id="game-canvas" width="1280" height="800"></canvas>
 
-  <div id="hud" class="hidden">
-    <div id="hud-top-left">
-      <div id="stars"></div>
-      <div id="money">$0</div>
-      <div id="health-wrap"><div id="health-bar"></div><span id="health-text">100</span></div>
-      <div id="ammo"></div>
-      <div id="jobs">0/6 jobs</div>
-    </div>
-    <div id="objective-box"><div id="objective-title">FREE ROAM</div><div id="objective-text">Explore Port Aurelia. Press M for missions.</div></div>
-    <div id="clock-box"><span id="clock">08:00</span><span id="speed">0 mph</span></div>
-    <div id="toast"></div>
-    <div id="prompt"></div>
-    <div id="center-msg"></div>
-  </div>
+<div id="hud" class="hidden"></div>
 
-  <div id="title-screen" class="screen">
-    <div class="title-inner">
-      <div class="title-kicker">PORT AURELIA &middot; 3600 &times; 2600</div>
-      <h1>AURELIA<br>NIGHTS</h1>
-      <p class="tagline">Six jobs. Five stars. One harbour city that never sleeps.</p>
-      <div class="title-buttons">
-        <button id="btn-new">NEW GAME</button>
-        <button id="btn-continue" class="secondary">CONTINUE</button>
-        <button id="btn-how">HOW TO PLAY</button>
-      </div>
-      <div id="save-info"></div>
-      <p class="foot">WASD move / drive &middot; E enter &amp; steal car &middot; Mouse aim, Click shoot &middot; M missions &middot; P pause &middot; F1 mute</p>
-    </div>
-  </div>
-
-  <div id="how-screen" class="screen hidden">
-    <div class="panel">
-      <h2>HOW TO PLAY</h2>
-      <p><b>On foot:</b> WASD walk, Shift sprint, E enter a car, Mouse aim, Left click fire. Pistol first, shotgun later.</p>
-      <p><b>Driving:</b> W accelerate, S brake / reverse, A D steer, Space handbrake, E exit the car, H horn.</p>
-      <p><b>Crime:</b> stealing a car, shooting, or ramming police raises your wanted level (1&ndash;5 stars). Cops hunt you harder with every star. Lay low to cool off, or pay $100 at a Spray Shop to wipe it clean and repair your car.</p>
-      <p><b>Shops:</b> stand by a shop door and press E &mdash; Spray Shop clears wanted, Gun Shop sells guns &amp; ammo, Diner heals, Hospital fully heals, Safehouse saves the game. Green $ pickups on the street are free cash.</p>
-      <p><b>Missions:</b> press M, pick a job, follow the yellow marker. Finish all six to own the night.</p>
-      <button id="btn-how-back">BACK</button>
-    </div>
-  </div>
-
-  <div id="mission-screen" class="screen hidden">
-    <div class="panel">
-      <h2>JOB BOARD &mdash; PORT AURELIA</h2>
-      <div id="mission-list"></div>
-      <button id="btn-mission-close">CLOSE [M]</button>
-    </div>
-  </div>
-
-  <div id="pause-screen" class="screen hidden">
-    <div class="panel">
-      <h2>PAUSED</h2>
-      <div class="title-buttons">
-        <button id="btn-resume">RESUME</button>
-        <button id="btn-save">SAVE GAME</button>
-        <button id="btn-quit">QUIT TO TITLE</button>
-      </div>
-      <p id="pause-save-msg"></p>
-    </div>
-  </div>
-
-  <div id="end-screen" class="screen hidden">
-    <div class="panel">
-      <h2 id="end-title">BUSTED</h2>
-      <p id="end-text"></p>
-      <button id="btn-end-respawn">RESPAWN AT HOSPITAL</button>
-    </div>
-  </div>
-
-  <div id="win-screen" class="screen hidden">
-    <div class="panel">
-      <h2>KING OF PORT AURELIA</h2>
-      <p>All six jobs done. The city is yours, Aurelia. Free roam continues &mdash; the night is still young.</p>
-      <button id="btn-win-close">KEEP PLAYING</button>
-    </div>
+<!-- Title -->
+<div id="screen-title" class="screen">
+  <div class="panel">
+    <h1>AURELIA NIGHTS</h1>
+    <p class="tagline">Port Aurelia never sleeps. Neither do you.</p>
+    <p class="story">You are Aurelia, driver-for-hire in Rosa's crew. Six jobs stand between
+      you and the crown of Port Aurelia — steal, survive, shoot, and outrun the
+      whole Port Aurelia PD. The harbour is yours if you can take it.</p>
+    <button id="btn-new-game" class="big">New Game</button>
+    <button id="btn-continue" class="big hidden">Continue</button>
+    <button id="btn-howto" class="big">How to Play</button>
+    <p class="foot">A top-down open-world crime game. All art, story and sound are original.</p>
   </div>
 </div>
-<script type="module" src="src/main.js"></script>
+
+<!-- How to -->
+<div id="screen-howto" class="screen hidden">
+  <div class="panel">
+    <h2>HOW TO PLAY</h2>
+    <div class="cols">
+      <div>
+        <h3>On foot</h3>
+        <p>WASD walk &middot; Shift sprint &middot; E steal / enter car<br>
+           Mouse aim &middot; Click fire &middot; 1 pistol / 2 shotgun</p>
+        <h3>Driving</h3>
+        <p>W accelerate &middot; S brake / reverse &middot; A D steer<br>
+           Space handbrake &middot; E exit car &middot; H horn</p>
+      </div>
+      <div>
+        <h3>Heat</h3>
+        <p>Stealing, shooting and ramming cops raise your stars.
+           Lay low to cool off, or pay $100 at Lola's Spray Shop.</p>
+        <h3>Keys</h3>
+        <p>M job board &middot; P pause &middot; F1 mute sound</p>
+        <h3>Shops</h3>
+        <p>Spray, guns, diner, hospital, safehouse (save).<br>
+           Grab street cash — $25 to $75 a pickup.</p>
+      </div>
+    </div>
+    <button id="btn-howto-back" class="big">Back</button>
+  </div>
+</div>
+
+<!-- Job board -->
+<div id="screen-jobboard" class="screen hidden">
+  <div class="panel wide">
+    <h2>ROSA'S JOB BOARD</h2>
+    <p class="tagline">Finish all six jobs to become King of Port Aurelia.</p>
+    <div id="job-list"></div>
+    <button id="btn-jobboard-close" class="big">Close (M)</button>
+  </div>
+</div>
+
+<!-- Pause -->
+<div id="screen-pause" class="screen hidden">
+  <div class="panel">
+    <h2>PAUSED</h2>
+    <p class="tagline">Port Aurelia waits for no one. Except now.</p>
+    <button id="btn-resume" class="big">Resume (P)</button>
+    <button id="btn-quit-title" class="big">Quit to Title</button>
+  </div>
+</div>
+
+<!-- Busted -->
+<div id="screen-busted" class="screen hidden">
+  <div class="panel">
+    <h2>BUSTED</h2>
+    <p class="tagline">The PD caught up with you. Fine paid, heat cleared.</p>
+    <button id="btn-busted-ok" class="big">Back on the street</button>
+  </div>
+</div>
+
+<!-- Wasted -->
+<div id="screen-wasted" class="screen hidden">
+  <div class="panel">
+    <h2>WASTED</h2>
+    <p class="tagline">St. Aurelia General patched you up. It cost you.</p>
+    <button id="btn-wasted-ok" class="big">Back on the street</button>
+  </div>
+</div>
+
+<!-- Win -->
+<div id="screen-win" class="screen hidden">
+  <div class="panel">
+    <h2>KING OF PORT AURELIA</h2>
+    <p class="tagline">All six jobs complete. The harbour is yours.</p>
+    <p id="win-stats" class="story"></p>
+    <button id="btn-win-again" class="big">Play Again</button>
+  </div>
+</div>
+
+<!-- End (unused placeholder kept for the screen set) -->
+<div id="screen-end" class="screen hidden">
+  <div class="panel">
+    <h2>THE END</h2>
+    <p class="tagline">Thanks for playing Aurelia Nights.</p>
+  </div>
+</div>
+
+<script src="src/config.js"></script>
+<script src="src/city.js"></script>
+<script src="src/particles.js"></script>
+<script src="src/vehicles.js"></script>
+<script src="src/walkers.js"></script>
+<script src="src/cops.js"></script>
+<script src="src/weapons.js"></script>
+<script src="src/jobs.js"></script>
+<script src="src/shops.js"></script>
+<script src="src/sound.js"></script>
+<script src="src/controls.js"></script>
+<script src="src/savegame.js"></script>
+<script src="src/hud.js"></script>
+<script src="src/draw.js"></script>
+<script src="src/engine.js"></script>
 </body>
 </html>
