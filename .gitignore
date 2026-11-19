@@ -1,10 +1,18 @@
-# Aurelia Nights — ignored files.
-# out/ is the build output of `node main.ts`; node_modules/ is never
-# committed. The rest keeps local clutter (logs, OS files, temp dirs)
-# out of the repo. Screenshots are committed — they are part of the entry.
+# Aurelia Nights — ignored files
+# Build output from main.ts
 out/
-node_modules/
+# Local playtest server artefacts
+.playtest/
 *.log
+# Screenshots are captured by the maker, never generated here
+# Editor and OS clutter
 .DS_Store
-dist/
-tmp/
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+# Node tooling leftovers (the game itself needs no install)
+node_modules/
+npm-debug.log

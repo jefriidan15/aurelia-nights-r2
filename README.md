@@ -1,66 +1,77 @@
+# Aurelia Nights
+
 [![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![rank](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![reward](https://make.fun/badge/gta6-01/jefriidan15/aurelia-nights-r2/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
-# Aurelia Nights
+**Aurelia Nights** is a complete top-down open-world crime game that runs
+entirely offline in a desktop browser. You are Rook Marlowe, a getaway driver
+fresh out of a bad deal, working your way back up the ladder in Aurelia Bay —
+a sun-soaked coastal city of harbours, neon market streets, hilltop villas and
+industrial docks. Steal cars, outrun the Aurelia Bay Police Department, take
+jobs from fixer Vera Solano, and build a reputation the whole city knows.
 
-A top-down open-world crime game in the fictional city of **Port Aurelia** — a 3600×2600 map with six districts (Old Town, Downtown, Marina, Little Vesper, Midtown, The Docks), a harbour, and Pier 9.
+## What is in the game
 
-You arrive with nothing. Boost cars, dodge a five-star police force, scoop up street cash, and work through six story jobs until the city is yours.
-
-## Play
-
-Just open `game/index.html` in a desktop browser — the game is plain static files, no build step, no network requests. Or serve the `game/` folder:
-
-```
-node serve.ts
-```
-
-then open `http://localhost:8080`.
+- **A living city** — six districts (Harbour, Old Town, Market Row, Marina,
+  North Hills, Dockside) with roads, traffic, pedestrians, parks, a beach
+  front and a working day/night cycle.
+- **Driving and car theft** — five car models with their own speed, grip and
+  handling. Walk up to any parked or moving car and take it. Traffic cars
+  follow the road grid, brake for jams and honk.
+- **Wanted system** — one to five stars. Patrol cars and foot officers chase,
+  ram and arrest you; lay low and the heat fades, or pay it off at a
+  Fixer phone booth.
+- **Story missions** — eight missions for Vera Solano, from a simple pickup to
+  a dockside shootout and a five-star escape, with cutscene-style briefings,
+  objectives on the minimap and cash rewards.
+- **Side work** — taxi fares, courier parcels, street races and hidden cash
+  stashes scattered around the city.
+- **Combat** — fists, pistol, pump shotgun and submachine gun, with ammo,
+  reloads, health and armour pickups, rival crew shooters and police fire.
+- **HUD and minimap** — health, armour, cash, wanted stars, weapon and ammo,
+  speed, clock, mission objective and a live minimap with blips.
+- **Save and continue** — progress (cash, mission, weapons, position) saves
+  to the browser and can be continued from the start screen.
+- **Sound** — fully synthesised WebAudio music, engine hum, sirens, gunshots
+  and city ambience. No audio files, nothing downloaded.
 
 ## Controls
 
-| Input | Action |
+| Key | Action |
 | --- | --- |
-| WASD / Arrows | Walk |
+| W A S D / arrows | Walk / drive |
+| Mouse | Aim (on foot) |
+| Left click | Shoot / punch |
+| E | Enter / exit car, steal car |
+| Space | Handbrake (in car) / sprint (on foot) |
 | Shift | Sprint |
-| Mouse | Aim |
-| Click / Space | Fire |
-| E | Steal a car / enter a shop / exit a car |
-| W/S/A/D (driving) | Accelerate / brake / steer |
-| Space (driving) | Handbrake |
-| H (driving) | Horn |
-| Q | Switch weapon |
-| M | Job board |
-| P | Pause |
-| F1 | Mute |
+| R | Reload |
+| 1–4 | Switch weapon |
+| J | Start Vera's next mission |
+| T / C | Start a taxi / courier side job |
+| G | Buy at the Gun Locker (Market Row) |
+| B | Pay off wanted level at a Fixer Booth |
+| M | Mute music and sound |
+| P / Esc | Pause |
 
-## The six jobs
+## How to play
 
-1. **Grand Theft Aurelia** — $400: boost a ride and drop it at the Marina.
-2. **Heat Wave** — $600: pick up a package at Pier 9 and deliver it hot.
-3. **Pier 9 Shootout** — $900: clear the Docks crew, then take the stash.
-4. **The Vault Job** — $1,500: crack the Downtown bank vault, escape to Rosa's Flat.
-5. **Four-Star Run** — $2,000: hit four stars and outrun the law to the Marina.
-6. **Lockdown** — $3,500: survive ninety seconds at five stars, then reach the harbour boat.
+Open `game/index.html` through any static file server (for example
+`node serve.ts`, then visit http://localhost:8080) and press **Start**.
+Follow the gold objective marker: finish missions to unlock the next one,
+earn cash, buy weapons at the Gun Locker, and keep your wanted level low
+between jobs. Getting busted or wasted costs cash and drops you at the
+nearest hospital or police station.
 
-Finish all six and Port Aurelia is yours.
+## Development
 
-## What's in the city
+Everything under `game/` is plain static files — no build step, no network
+requests. The entry point is `game/index.html`; the game code lives in
+`game/src/` as small modules, one job each. `main.ts` (Node 22) copies
+`game/` and `screenshots/` into the output directory and writes
+`dossier.json` with the make.fun library in `vendor/makefun-game.ts`.
 
-- **16 traffic cars** and **8 parked cars** to steal; **30 pedestrians** who scatter when shots are fired.
-- **Five-star wanted system**: cops chase on foot, ram your car, shoot at 3+ stars, and arrest you if they hold you close for two seconds. Heat fades after a quiet spell.
-- **Five shops**: Lola's Spray Shop ($100 — wipe wanted + repair), Iron & Oak (pistol $150, shotgun $400, ammo $25), The Golden Gull diner, St. Aurelia General hospital, and Rosa's Flat safehouse (sleep to save + heal).
-- **Street cash** pickups ($25–$75), a day/night cycle with headlights and lamp glow, synthesized WebAudio sound (no audio files), a HUD with wanted stars and a minimap, and localStorage saves.
+## Licence
 
-## Screenshots
-
-The four dossier screenshots are staged renders from the live game (`?shot=start|chase|docks|night`, seed 2).
-
-## Build the dossier
-
-```
-node main.ts
-```
-
-That copies `game/` and `screenshots/` into `/output` and writes `/output/dossier.json` via the vendored `vendor/makefun-game.ts` library. The build needs nothing installed — Node 22 runs the TypeScript entrypoint directly.
+MIT — see `LICENSE`.

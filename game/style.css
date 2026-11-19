@@ -1,41 +1,75 @@
-* { box-sizing: border-box; }
+/* Aurelia Nights — presentation layer: HUD, menus and overlays. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0e1a;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #f2ead8; }
+#stage { position: relative; width: 100vw; height: 100vh; }
+#world { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+.hidden { display: none !important; }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  background: #07090f;
-  color: #e8ecf4;
-  font-family: monospace, ui-monospace, Menlo, Consolas, monospace;
-  height: 100%;
-  overflow: hidden;
-}
+/* ---- HUD ---- */
+#hud { position: absolute; inset: 0; pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0,0,0,.85); }
+#hud-top-left { position: absolute; top: 14px; left: 16px; }
+#wanted { font-size: 26px; letter-spacing: 4px; color: #ffd23e; min-height: 32px; }
+#wanted .lit { color: #ffcf2e; }
+#wanted .dim { color: rgba(255,255,255,.22); }
+#cashline { font-size: 22px; font-weight: 800; color: #7dff9b; margin-top: 2px; }
+#cashline #respect { color: #ffd23e; font-size: 15px; }
+#clockline { font-size: 14px; color: #e8e2d2; opacity: .9; margin-top: 2px; }
+#hud-top-right { position: absolute; top: 14px; right: 16px; text-align: right; }
+#minimap { border: 2px solid rgba(255,210,62,.75); border-radius: 8px;
+  background: #10182a; box-shadow: 0 2px 14px rgba(0,0,0,.6); }
+#objective { margin-top: 8px; max-width: 300px; margin-left: auto; font-size: 14px;
+  background: rgba(8,10,22,.72); border-left: 4px solid #ffd23e; border-radius: 4px;
+  padding: 8px 10px; text-align: left; }
+#obj-label { display: block; font-size: 11px; letter-spacing: 2px; color: #ffd23e; }
+#hud-bottom-left { position: absolute; left: 16px; bottom: 16px; }
+#vitals .bar { position: relative; width: 240px; height: 18px; margin-top: 6px;
+  background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.35); border-radius: 3px; overflow: hidden; }
+#vitals .bar div { height: 100%; transition: width .15s; }
+#healthbar { background: linear-gradient(90deg,#37d67a,#7dff9b); width: 100%; }
+#armorbar { background: linear-gradient(90deg,#3f8cff,#8ec2ff); width: 0%; }
+#vitals .bar span { position: absolute; inset: 0; font-size: 11px; letter-spacing: 2px;
+  display: flex; align-items: center; justify-content: center; color: #fff; }
+#weaponline { margin-top: 8px; font-size: 18px; font-weight: 700; }
+#weaponline #ammo { color: #ffd23e; font-size: 15px; }
+#hud-bottom-right { position: absolute; right: 16px; bottom: 16px; text-align: right; }
+#speedline { font-size: 34px; font-weight: 800; line-height: 1; }
+#speedline small { font-size: 13px; color: #ffd23e; }
+#carline { font-size: 14px; color: #e8e2d2; margin-top: 4px; }
+#toast { position: absolute; top: 18%; left: 50%; transform: translateX(-50%);
+  font-size: 20px; font-weight: 700; color: #ffd23e; text-align: center;
+  opacity: 0; transition: opacity .3s; }
+#hint { position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
+  font-size: 15px; background: rgba(8,10,22,.75); padding: 6px 14px; border-radius: 20px; }
+#banner { position: absolute; top: 34%; left: 50%; transform: translate(-50%,-50%);
+  font-size: 44px; font-weight: 900; letter-spacing: 6px; color: #ffd23e;
+  text-shadow: 0 3px 0 #7a2d12, 0 6px 18px rgba(0,0,0,.8); text-align: center; }
 
-#wrap {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px;
-}
-
-#game {
-  display: block;
-  background: #0d1526;
-  border: 2px solid #2a3348;
-  border-radius: 6px;
-  box-shadow: 0 0 42px rgba(0, 0, 0, 0.8);
-  max-width: 100%;
-  max-height: calc(100vh - 44px);
-  cursor: crosshair;
-}
-
-#hint {
-  font-size: 12px;
-  color: #7c8aa0;
-  text-align: center;
-  letter-spacing: 0.4px;
-  line-height: 1.5;
-  max-width: 1280px;
-}
+/* ---- Overlays / menus ---- */
+.overlay { position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; background: rgba(5,7,16,.62); backdrop-filter: blur(2px); z-index: 5; }
+.panel { width: min(620px, 92vw); padding: 34px 38px; border-radius: 14px;
+  background: linear-gradient(160deg, rgba(16,22,44,.97), rgba(34,18,52,.97));
+  border: 1px solid rgba(255,210,62,.45); box-shadow: 0 20px 60px rgba(0,0,0,.7); }
+.panel.small { width: min(460px, 92vw); text-align: center; }
+.panel h1 { font-size: 56px; line-height: .95; letter-spacing: 4px; color: #fff; }
+.panel h1 span { color: #ffd23e; }
+.panel h2 { font-size: 34px; letter-spacing: 3px; color: #ffd23e; margin-bottom: 10px; }
+.tagline { margin-top: 10px; font-size: 17px; color: #ffd23e; font-style: italic; }
+.story { margin-top: 14px; font-size: 15px; line-height: 1.55; color: #ddd6c2; }
+.menu-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }
+.menu-buttons button { pointer-events: auto; cursor: pointer; padding: 13px 18px;
+  font-size: 17px; font-weight: 800; letter-spacing: 2px; color: #14101f;
+  background: linear-gradient(180deg,#ffe066,#f5b90c); border: none; border-radius: 8px; }
+.menu-buttons button:hover { filter: brightness(1.12); }
+.menu-buttons button:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.menu-buttons button:nth-child(2) { background: linear-gradient(180deg,#dfe8ff,#9db4e8); }
+.menu-buttons button:nth-child(3) { background: transparent; color: #ffd23e;
+  border: 1px solid rgba(255,210,62,.6); }
+#howto { margin-top: 16px; font-size: 14px; line-height: 1.6; color: #ddd6c2;
+  border-top: 1px solid rgba(255,255,255,.18); padding-top: 14px; }
+#howto b { color: #ffd23e; }
+.foot { margin-top: 18px; font-size: 12px; color: rgba(221,214,194,.6); }
+#pause-stats, #end-text, #brief-body { font-size: 15px; line-height: 1.6; color: #ddd6c2; }
+#brief-body { white-space: pre-line; }

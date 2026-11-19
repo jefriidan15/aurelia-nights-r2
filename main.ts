@@ -1,49 +1,35 @@
-// Aurelia Nights — entrypoint for the make.fun gta6-01 dossier build.
-//
-// Running `node main.ts` assembles the submission in /output:
-//   /output/game/          a copy of this repo's game/
-//   /output/screenshots/   a copy of this repo's screenshots/
-//   /output/dossier.json   the dossier for those two trees, written by
-//                           buildDossier from vendor/makefun-game.ts
-//
-// The caps below are the bounty's gate caps, so a dossier built here is
-// the same one the scorer would build from the same /output.
+// Aurelia Nights — entrypoint for make.fun gta6-01.
+// Packs the finished game and its screenshots into the output directory
+// and writes the dossier the scorer compares byte for byte.
 
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
-const repoRoot = dirname(fileURLToPath(import.meta.url));
-const outRoot = '/output';
+const repoRoot = resolve(import.meta.dirname);
+const outDir = resolve(process.env.MAKEFUN_OUTPUT_DIR || '/output');
 
-const caps = {
+function packTree(name) {
+  const from = join(repoRoot, name);
+  const to = join(outDir, name);
+  if (!existsSync(from)) throw new Error(`missing ${name}/ in the repository`);
+  rmSync(to, { recursive: true, force: true });
+  cpSync(from, to, { recursive: true });
+  const entries = readdirSync(to);
+  if (entries.length === 0) throw new Error(`${name}/ is empty`);
+}
+
+mkdirSync(outDir, { recursive: true });
+packTree('game');
+packTree('screenshots');
+
+const dossier = buildDossier(outDir, {
   text_max_bytes: 163840,
   screenshots: { max: 4, max_bytes: 262144 },
   game_max_files: 993,
   game_max_bytes: 50331648,
-};
-
-function copyTree(name) {
-  const from = join(repoRoot, name);
-  const to = join(outRoot, name);
-  if (!existsSync(from)) {
-    throw new Error(`main.ts: ${name}/ is missing from the repo, nothing to hand in`);
-  }
-  cpSync(from, to, { recursive: true });
-  return to;
-}
-
-// Start from a clean /output so a stale file can never ride along.
-// The dossier is then built from exactly what was just copied, which
-// is what the scorer will see.
-rmSync(outRoot, { recursive: true, force: true });
-mkdirSync(outRoot, { recursive: true });
-
-copyTree('game');
-copyTree('screenshots');
-
-const dossier = buildDossier(outRoot, caps);
-writeFileSync(join(outRoot, 'dossier.json'), dossier);
-
-console.log(`dossier written: ${join(outRoot, 'dossier.json')} (${dossier.length} bytes)`);
+});
+if (dossier.length === 0) throw new Error('buildDossier wrote an empty dossier');
+writeFileSync(join(outDir, 'dossier.json'), dossier);
+const gameEntries = readdirSync(join(outDir, 'game'), { recursive: true });
+console.log(`aurelia-nights packed: ${gameEntries.length} game entries, dossier ${dossier.length} bytes -> ${outDir}`);

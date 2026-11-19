@@ -3,29 +3,96 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aurelia Nights — Port Aurelia</title>
-<link rel="icon" href="data:,">
+<meta name="description" content="Aurelia Nights — a complete top-down open-world crime game: steal cars, run missions for Vera Solano, and outrun the Aurelia Bay Police Department.">
+<title>Aurelia Nights — Open-World Crime Game</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="wrap">
-  <canvas id="game" width="1280" height="800"></canvas>
-  <div id="hint">Aurelia Nights — WASD to walk &middot; E to steal / enter &middot; mouse to aim, click to fire &middot; M for jobs &middot; P to pause &middot; F1 to mute &middot; Shift to sprint</div>
+<div id="stage">
+  <canvas id="world" width="1280" height="720"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="hud-top-left">
+      <div id="wanted" aria-label="Wanted level"></div>
+      <div id="cashline">$<span id="cash">0</span> &nbsp;·&nbsp; <span id="respect">REP 0</span></div>
+      <div id="clockline"><span id="clock">08:00</span> &nbsp;·&nbsp; <span id="district">Old Town</span></div>
+    </div>
+    <div id="hud-top-right">
+      <canvas id="minimap" width="220" height="160"></canvas>
+      <div id="objective"><span id="obj-label">OBJECTIVE</span><span id="obj-text"></span></div>
+    </div>
+    <div id="hud-bottom-left">
+      <div id="vitals">
+        <div class="bar"><div id="healthbar"></div><span>HEALTH</span></div>
+        <div class="bar"><div id="armorbar"></div><span>ARMOUR</span></div>
+      </div>
+      <div id="weaponline"><span id="weapon">Fists</span> <span id="ammo"></span></div>
+    </div>
+    <div id="hud-bottom-right">
+      <div id="speedline"><span id="speed">0</span> <small>km/h</small></div>
+      <div id="carline"></div>
+    </div>
+    <div id="toast"></div>
+    <div id="hint"></div>
+    <div id="banner" class="hidden"></div>
+  </div>
+
+  <div id="menu" class="overlay">
+    <div class="panel">
+      <h1>AURELIA<br><span>NIGHTS</span></h1>
+      <p class="tagline">A sun-soaked city. One driver. No way back but through.</p>
+      <p class="story">Rook Marlowe is out of luck and out of friends. Fixer Vera Solano
+      has eight jobs that pay — if the Aurelia Bay Police Department does not
+      catch up first. Steal cars, run the jobs, stay free.</p>
+      <div class="menu-buttons">
+        <button id="btn-start">▶ &nbsp;NEW GAME</button>
+        <button id="btn-continue">↻ &nbsp;CONTINUE</button>
+        <button id="btn-how">HOW TO PLAY</button>
+      </div>
+      <div id="howto" class="hidden">
+        <p><b>WASD / arrows</b> — walk &amp; drive &nbsp;·&nbsp; <b>Mouse</b> — aim,
+        <b>click</b> — shoot &nbsp;·&nbsp; <b>E</b> — steal / enter car &nbsp;·&nbsp;
+        <b>Space</b> — handbrake &nbsp;·&nbsp; <b>Shift</b> — sprint &nbsp;·&nbsp;
+        <b>R</b> — reload &nbsp;·&nbsp; <b>1–4</b> — weapons &nbsp;·&nbsp;
+        <b>M</b> — mute &nbsp;·&nbsp; <b>P</b> — pause</p>
+        <p>Follow the gold marker. Finish Vera's missions to unlock the next.
+        Wanted stars fade if you stay out of sight — or pay a Fixer booth.</p>
+      </div>
+      <p class="foot">Aurelia Nights · an original game · no real city, no real people</p>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <div class="panel small">
+      <h2>PAUSED</h2>
+      <p id="pause-stats"></p>
+      <div class="menu-buttons">
+        <button id="btn-resume">RESUME</button>
+        <button id="btn-save-quit">SAVE &amp; QUIT TO MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="endcard" class="overlay hidden">
+    <div class="panel small">
+      <h2 id="end-title">BUSTED</h2>
+      <p id="end-text"></p>
+      <div class="menu-buttons">
+        <button id="btn-retry">TRY AGAIN</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="brief" class="overlay hidden">
+    <div class="panel">
+      <h2 id="brief-title">MISSION</h2>
+      <p id="brief-body"></p>
+      <div class="menu-buttons">
+        <button id="btn-brief-go">START MISSION</button>
+      </div>
+    </div>
+  </div>
 </div>
-<script src="src/settings.js"></script>
-<script src="src/rng.js"></script>
-<script src="src/world.js"></script>
-<script src="src/state.js"></script>
-<script src="src/input.js"></script>
-<script src="src/audio.js"></script>
-<script src="src/player.js"></script>
-<script src="src/cars.js"></script>
-<script src="src/people.js"></script>
-<script src="src/police.js"></script>
-<script src="src/guns.js"></script>
-<script src="src/missions.js"></script>
-<script src="src/stores.js"></script>
-<script src="src/render.js"></script>
-<script src="src/loop.js"></script>
+<script type="module" src="src/boot.js"></script>
 </body>
 </html>
