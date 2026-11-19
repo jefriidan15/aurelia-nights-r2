@@ -1,6 +1,9 @@
 // Aurelia Nights — loop.js
-// Boot, the main loop, screen state machine, day/night clock, screenshot
-// staging (?shot=…) and the debug handle the automated playtest drives.
+// Boot, the frame loop, the screen state machine, the day/night clock,
+// deterministic screenshot staging (?shot=…), and the debug handle the
+// automated playtest drives. Nothing here fakes state: every debug call
+// runs the same code paths a real player would. The loop is capped at
+// 50ms per frame so a backgrounded tab never jumps the simulation.
 (function () {
   'use strict';
   var A = window.Aurelia = window.Aurelia || {};
@@ -18,9 +21,7 @@
     var seed = parseInt(params.get('seed') || '1', 10) || 1;
     A.newGame(seed);
     var shot = params.get('shot');
-    if (shot) {
-      A.stageShot(shot, seed);
-    }
+    if (shot) { A.stageShot(shot, seed); }
     window.addEventListener('resize', A.fitCanvas);
     A.fitCanvas();
     lastT = performance.now();
@@ -29,15 +30,16 @@
 
   A.fitCanvas = function () {
     if (!canvas) { return; }
-    // Never upscale: the canvas bitmap is 1280x800 and screenshots must be
-    // exactly that size, so the style size stays at or below the bitmap.
+    // Never upscale: the bitmap is 1280x800 and screenshots must stay
+    // exactly that size, so the styled size stays at or below it.
     var scale = Math.min(1, window.innerWidth / 1280, window.innerHeight / 800);
     canvas.style.width = Math.floor(1280 * scale) + 'px';
     canvas.style.height = Math.floor(800 * scale) + 'px';
   };
 
-  // Set up a deterministic scene for a screenshot: title skipped, the
-  // world already populated, the camera already where it should be.
+  // Stage one deterministic scene for a screenshot: skip the title,
+  // drop the player (and, for the chase, the cops) where the shot needs
+  // them, and centre the camera on them.
   A.stageShot = function (shot, seed) {
     var G = A.G;
     A.seedRandom(seed * 7919 + 13);
@@ -54,7 +56,7 @@
       G.wanted = 3;
       G.quietTimer = 0;
       while (G.cops.length < 6) { A.spawnCop(); }
-      // Pull the cops in close so the chase reads in one frame.
+      // Ring the car with cops so the chase reads in a single frame.
       for (var i = 0; i < G.cops.length; i++) {
         var a = (i / G.cops.length) * Math.PI * 2;
         G.cops[i].x = p.x + Math.cos(a) * 260;
@@ -97,7 +99,7 @@
     var G = A.G;
     if (!G) { return; }
 
-    // Global keys work on every screen.
+    // F1 mutes on every screen.
     if (A.hit('F1')) {
       G.muted = !G.muted;
       A.flash(G.muted ? 'Sound muted' : 'Sound on', 1.2);
@@ -147,14 +149,13 @@
     A.updateMissions(dt);
     A.sirenTick(dt);
 
-    // Cash pickups slowly restock.
+    // Street cash slowly restocks while the player roams.
     G.pickupTimer += dt;
     if (G.pickupTimer > 20) {
       G.pickupTimer = 0;
       if (G.pickups.length < A.CFG.PICKUP_COUNT) { A.addPickup(); }
     }
 
-    // Camera follows the player.
     G.cam.x = A.clamp(G.player.x, 640, A.CFG.WORLD_W - 640);
     G.cam.y = A.clamp(G.player.y, 400, A.CFG.WORLD_H - 400);
 
@@ -213,13 +214,17 @@
   };
 
   // ---- debug handle for the automated playtest ---------------------------
-  // Everything here drives the real game code paths; nothing fakes state.
+  // Every entry below drives the real game code paths; none of them
+  // writes state directly except the setters that name what they set.
   A.debug = {
     G: function () { return A.G; },
     mode: function () { return A.G.mode; },
     teleport: function (x, y) {
       var p = A.G.player;
-      if (p.inCar) { var car = A.playerCar(); if (car) { car.x = x; car.y = y; } }
+      if (p.inCar) {
+        var car = A.playerCar();
+        if (car) { car.x = x; car.y = y; }
+      }
       p.x = x; p.y = y;
       A.G.cam.x = A.clamp(x, 640, A.CFG.WORLD_W - 640);
       A.G.cam.y = A.clamp(y, 400, A.CFG.WORLD_H - 400);
@@ -238,7 +243,10 @@
     mission: function () {
       return { idx: A.G.missionIdx, step: A.G.mission ? A.G.mission.step : -1, objective: A.objectiveText() };
     },
-    nearestCar: function () { var c = A.nearestCar(A.G.player.x, A.G.player.y, 5000); return c ? { id: c.id, x: c.x, y: c.y } : null; },
+    nearestCar: function () {
+      var c = A.nearestCar(A.G.player.x, A.G.player.y, 5000);
+      return c ? { id: c.id, x: c.x, y: c.y } : null;
+    },
     nearestShop: function (kind) {
       var best = null, bestD = 1e9;
       for (var i = 0; i < A.SHOPS.length; i++) {
@@ -265,21 +273,28 @@
     },
     buy: function (id) { A.buyOffer(id); },
     fireAt: function (x, y) {
-      var G = A.G;
-      var p = G.player;
-      // Aim the virtual mouse at the target — tryFire aims at the cursor.
+      var G = A.G, p = G.player;
+      // Point the virtual mouse at the target — tryFire aims at the cursor.
       A.mouse.x = x - G.cam.x + 640;
       A.mouse.y = y - G.cam.y + 400;
       p.angle = Math.atan2(y - p.y, x - p.x);
       A.tryFire();
     },
-    hostiles: function () { return A.G.hostiles.map(function (h) { return { x: h.x, y: h.y, hp: h.hp }; }); },
+    hostiles: function () {
+      return A.G.hostiles.map(function (h) { return { x: h.x, y: h.y, hp: h.hp }; });
+    },
     cops: function () { return A.G.cops.length; },
     counts: function () {
-      var G = A.G;
-      var alivePeds = 0;
-      for (var i = 0; i < G.peds.length; i++) { if (G.peds[i].hp > 0) { alivePeds++; } }
-      return { traffic: G.cars.length, parked: G.parked.length, pedsAlive: alivePeds, pedsTotal: G.peds.length, cops: G.cops.length, pickups: G.pickups.length, bullets: G.bullets.length, hostiles: G.hostiles.length };
+      var G = A.G, alivePeds = 0;
+      for (var i = 0; i < G.peds.length; i++) {
+        if (G.peds[i].hp > 0) { alivePeds++; }
+      }
+      return {
+        traffic: G.cars.length, parked: G.parked.length,
+        pedsAlive: alivePeds, pedsTotal: G.peds.length,
+        cops: G.cops.length, pickups: G.pickups.length,
+        bullets: G.bullets.length, hostiles: G.hostiles.length
+      };
     },
     saveNow: function () { return A.saveGame(); },
     loadSaveRaw: function () { return window.localStorage.getItem(A.CFG.SAVE_KEY); },

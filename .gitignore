@@ -1,2 +1,10 @@
+# Aurelia Nights — ignored files.
+# out/ is the build output of `node main.ts`; node_modules/ is never
+# committed. The rest keeps local clutter (logs, OS files, temp dirs)
+# out of the repo. Screenshots are committed — they are part of the entry.
 out/
 node_modules/
+*.log
+.DS_Store
+dist/
+tmp/

@@ -1,6 +1,8 @@
 // Aurelia Nights — guns.js
-// Pistol and shotgun combat: fire rates, ammo, bullet travel, hit tests
-// against pedestrians, cops and mission hostiles, plus particles.
+// Pistol and shotgun combat: fire rates and ammo, bullet travel and hit
+// tests against pedestrians, cops and mission hostiles, plus the
+// particle bursts everything else in the game reuses. Bullets die on
+// walls, on their range limit, or on the first thing they hit.
 (function () {
   'use strict';
   var A = window.Aurelia = window.Aurelia || {};
@@ -8,34 +10,37 @@
   A.fireTimer = 0;
 
   A.updateGuns = function (dt) {
-    var G = A.G;
+    var G = A.G, p = G.player;
     A.fireTimer = Math.max(0, A.fireTimer - dt);
-    var p = G.player;
 
-    // Mouse held (or Space on foot) fires the current weapon.
+    // Hold the mouse (or Space on foot) to fire the current weapon.
     if (G.mode === 'playing' && (A.mouse.down || A.down('Space')) && !p.inCar) {
       A.tryFire();
     }
-    // Switch weapon with Q or the number keys.
     if (A.hit('KeyQ') || A.hit('Digit1') || A.hit('Digit2')) { A.cycleWeapon(); }
 
-    // Move bullets and resolve hits.
+    stepBullets(G, dt);
+    stepParticles(G, dt);
+  };
+
+  function stepBullets(G, dt) {
     for (var i = G.bullets.length - 1; i >= 0; i--) {
       var b = G.bullets[i];
       b.travelled += b.speed * dt;
       b.x += Math.cos(b.angle) * b.speed * dt;
       b.y += Math.sin(b.angle) * b.speed * dt;
       b.life -= dt;
-      var dead = b.life <= 0 || b.travelled > b.range;
-      if (!dead && A.hitsBuilding(b.x, b.y, 0)) {
+      var spent = b.life <= 0 || b.travelled > b.range;
+      if (!spent && A.hitsBuilding(b.x, b.y, 0)) {
         A.burst(b.x, b.y, '#bdc3c7', 5, 90);
-        dead = true;
+        spent = true;
       }
-      if (!dead) { dead = A.bulletHits(b); }
-      if (dead) { G.bullets.splice(i, 1); }
+      if (!spent) { spent = A.bulletHits(b); }
+      if (spent) { G.bullets.splice(i, 1); }
     }
+  }
 
-    // Particles.
+  function stepParticles(G, dt) {
     for (var j = G.parts.length - 1; j >= 0; j--) {
       var pt = G.parts[j];
       pt.life -= dt;
@@ -44,18 +49,16 @@
       pt.vx *= 0.92; pt.vy *= 0.92;
       if (pt.life <= 0) { G.parts.splice(j, 1); }
     }
-  };
+  }
 
   A.cycleWeapon = function () {
     var p = A.G.player;
-    if (p.weapons.shotgun && p.weapon === 'pistol') { p.weapon = 'shotgun'; }
-    else { p.weapon = 'pistol'; }
+    p.weapon = (p.weapons.shotgun && p.weapon === 'pistol') ? 'shotgun' : 'pistol';
     A.sfx('click');
   };
 
   A.tryFire = function () {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     if (A.fireTimer > 0 || G.over) { return; }
     if (!p.weapons[p.weapon]) { return; }
     if (p.ammo[p.weapon] <= 0) {
@@ -84,7 +87,7 @@
     }
     A.burst(p.x + Math.cos(aim) * 24, p.y + Math.sin(aim) * 24, '#f39c12', 6, 160);
     A.scarePeds(p.x, p.y, 520);
-    A.raiseWanted(0); // firing keeps the heat clock fresh without adding stars
+    // Firing keeps the heat clock fresh without adding a star.
     G.quietTimer = 0;
   };
 
@@ -96,47 +99,58 @@
     });
   };
 
-  // Returns true when the bullet hit something.
+  // True when the bullet hit something and should stop.
   A.bulletHits = function (b) {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     if (b.from === 'player') {
-      for (var i = 0; i < G.peds.length; i++) {
-        var pd = G.peds[i];
-        if (pd.hp > 0 && A.dist(b.x, b.y, pd.x, pd.y) < 15) {
-          pd.hp -= b.dmg;
-          A.burst(b.x, b.y, '#c0392b', 8, 150);
-          if (pd.hp <= 0) { A.killPed(pd, 'shot'); }
-          return true;
-        }
-      }
-      for (var j = 0; j < G.cops.length; j++) {
-        var cop = G.cops[j];
-        if (cop.hp > 0 && A.dist(b.x, b.y, cop.x, cop.y) < 15) {
-          cop.hp -= b.dmg;
-          A.burst(b.x, b.y, '#3498db', 8, 150);
-          if (cop.hp <= 0) { A.killCop(cop); }
-          return true;
-        }
-      }
-      for (var k = 0; k < G.hostiles.length; k++) {
-        var h = G.hostiles[k];
-        if (h.hp > 0 && A.dist(b.x, b.y, h.x, h.y) < 16) {
-          h.hp -= b.dmg;
-          A.burst(b.x, b.y, '#e74c3c', 8, 150);
-          if (h.hp <= 0) { A.hostileDown(h); }
-          return true;
-        }
-      }
-    } else {
-      // Enemy fire can only hurt the player (on foot or in the car).
-      if (A.dist(b.x, b.y, p.x, p.y) < (p.inCar ? 24 : 14)) {
-        A.damagePlayer(b.dmg, 'Shot down in the street.');
+      return hitPeds(G, b) || hitCops(G, b) || hitHostiles(G, b);
+    }
+    // Enemy fire can only hurt the player, on foot or in the car.
+    if (A.dist(b.x, b.y, p.x, p.y) < (p.inCar ? 24 : 14)) {
+      A.damagePlayer(b.dmg, 'Shot down in the street.');
+      return true;
+    }
+    return false;
+  };
+
+  function hitPeds(G, b) {
+    for (var i = 0; i < G.peds.length; i++) {
+      var pd = G.peds[i];
+      if (pd.hp > 0 && A.dist(b.x, b.y, pd.x, pd.y) < 15) {
+        pd.hp -= b.dmg;
+        A.burst(b.x, b.y, '#c0392b', 8, 150);
+        if (pd.hp <= 0) { A.killPed(pd, 'shot'); }
         return true;
       }
     }
     return false;
-  };
+  }
+
+  function hitCops(G, b) {
+    for (var j = 0; j < G.cops.length; j++) {
+      var cop = G.cops[j];
+      if (cop.hp > 0 && A.dist(b.x, b.y, cop.x, cop.y) < 15) {
+        cop.hp -= b.dmg;
+        A.burst(b.x, b.y, '#3498db', 8, 150);
+        if (cop.hp <= 0) { A.killCop(cop); }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function hitHostiles(G, b) {
+    for (var k = 0; k < G.hostiles.length; k++) {
+      var h = G.hostiles[k];
+      if (h.hp > 0 && A.dist(b.x, b.y, h.x, h.y) < 16) {
+        h.hp -= b.dmg;
+        A.burst(b.x, b.y, '#e74c3c', 8, 150);
+        if (h.hp <= 0) { A.hostileDown(h); }
+        return true;
+      }
+    }
+    return false;
+  }
 
   A.burst = function (x, y, color, n, speed) {
     var G = A.G;

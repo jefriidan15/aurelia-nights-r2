@@ -1,7 +1,9 @@
 // Aurelia Nights — missions.js
 // The six story jobs. Each job is a short chain of steps — go somewhere,
-// steal something, hold a zone, survive the heat — and pays out the exact
-// amount from the spec when the last step lands.
+// steal something, hold a zone, survive the heat — and pays the exact
+// amount from the spec when its last step lands. The last job wins
+// the game. Progress saves after every completed job, so quitting
+// mid-campaign never loses a payout.
 (function () {
   'use strict';
   var A = window.Aurelia = window.Aurelia || {};
@@ -12,10 +14,9 @@
     var def = A.MISSIONS[idx];
     G.missionIdx = idx;
     G.mission = {
-      idx: idx, step: 0, t: 0,
-      kills: 0, stolenAt: G.stats.stolen,
-      hostilesSpawned: false, holdT: 0, surviveT: 0,
-      startedWanted: G.wanted
+      idx: idx, step: 0, t: 0, kills: 0,
+      stolenAt: G.stats.stolen, hostilesSpawned: false,
+      holdT: 0, surviveT: 0, startedWanted: G.wanted
     };
     G.vaultCopsSpawned = false;
     A.showBanner('JOB ' + (idx + 1) + ' — ' + def.name + '  ($' + def.pay + ')', 4);
@@ -47,17 +48,11 @@
   };
 
   A.advanceStep = function () {
-    var G = A.G;
-    var m = G.mission;
+    var G = A.G, m = G.mission;
     m.step += 1;
-    m.t = 0;
-    m.holdT = 0;
-    m.surviveT = 0;
-    m.hostilesSpawned = false;
+    m.t = 0; m.holdT = 0; m.surviveT = 0; m.hostilesSpawned = false;
     A.sfx('pickup');
-    if (m.step >= A.MISSIONS[m.idx].steps.length) {
-      A.completeMission();
-    }
+    if (m.step >= A.MISSIONS[m.idx].steps.length) { A.completeMission(); }
   };
 
   A.completeMission = function () {
@@ -68,10 +63,7 @@
     A.showBanner(def.name + ' complete — +$' + def.pay, 4);
     A.sfx('cash');
     A.saveGame();
-    if (G.mission.idx + 1 >= A.MISSIONS.length) {
-      A.winGame();
-      return;
-    }
+    if (G.mission.idx + 1 >= A.MISSIONS.length) { A.winGame(); return; }
     A.startMission(G.mission.idx + 1);
   };
 
@@ -91,56 +83,43 @@
     if (!step) { return; }
     var p = G.player;
     m.t += dt;
+    var here = A.dist(p.x, p.y, step.x || 0, step.y || 0);
 
-    switch (step.kind) {
-      case 'steal':
-        if (G.stats.stolen > m.stolenAt) { A.advanceStep(); }
-        break;
-      case 'goto':
-      case 'deliver':
-        if (A.dist(p.x, p.y, step.x, step.y) < step.r) {
-          if (step.kind === 'deliver') {
-            // Handing over hot goods draws the law.
-            A.raiseWanted(1, 'Hot delivery');
-          }
-          A.advanceStep();
+    if (step.kind === 'steal') {
+      if (G.stats.stolen > m.stolenAt) { A.advanceStep(); }
+    } else if (step.kind === 'goto' || step.kind === 'deliver') {
+      if (here < step.r) {
+        if (step.kind === 'deliver') { A.raiseWanted(1, 'Hot delivery'); }
+        A.advanceStep();
+      }
+    } else if (step.kind === 'drive') {
+      if (p.inCar && here < step.r) { A.advanceStep(); }
+    } else if (step.kind === 'wanted') {
+      if (G.wanted >= step.n) { A.advanceStep(); }
+    } else if (step.kind === 'clear') {
+      if (!m.hostilesSpawned) {
+        m.hostilesSpawned = true;
+        A.spawnHostiles(step.count, step.cx, step.cy, step.r);
+      }
+      if (m.kills >= step.count) { A.advanceStep(); }
+    } else if (step.kind === 'hold') {
+      if (here < step.r) {
+        m.holdT += dt;
+        if (!G.vaultCopsSpawned && m.holdT > 2) {
+          G.vaultCopsSpawned = true;
+          A.raiseWanted(2, 'Silent alarm');
+          A.flash('Silent alarm — cops incoming', 2.5);
         }
-        break;
-      case 'drive':
-        if (p.inCar && A.dist(p.x, p.y, step.x, step.y) < step.r) { A.advanceStep(); }
-        break;
-      case 'wanted':
-        if (G.wanted >= step.n) { A.advanceStep(); }
-        break;
-      case 'clear':
-        if (!m.hostilesSpawned) {
-          m.hostilesSpawned = true;
-          A.spawnHostiles(step.count, step.cx, step.cy, step.r);
-        }
-        if (m.kills >= step.count) { A.advanceStep(); }
-        break;
-      case 'hold':
-        if (A.dist(p.x, p.y, step.x, step.y) < step.r) {
-          m.holdT += dt;
-          if (!G.vaultCopsSpawned && m.holdT > 2) {
-            G.vaultCopsSpawned = true;
-            A.raiseWanted(2, 'Silent alarm');
-            A.flash('Silent alarm — cops incoming', 2.5);
-          }
-          if (m.holdT >= step.secs) { A.advanceStep(); }
-        } else {
-          m.holdT = Math.max(0, m.holdT - dt);
-        }
-        break;
-      case 'survive':
-        if (G.wanted < A.CFG.MAX_WANTED) { G.wanted = A.CFG.MAX_WANTED; G.quietTimer = 0; }
-        if (A.dist(p.x, p.y, step.cx, step.cy) < step.r) {
-          m.surviveT += dt;
-          if (m.surviveT >= step.secs) { A.advanceStep(); }
-        }
-        break;
-      default:
-        break;
+        if (m.holdT >= step.secs) { A.advanceStep(); }
+      } else {
+        m.holdT = Math.max(0, m.holdT - dt);
+      }
+    } else if (step.kind === 'survive') {
+      if (G.wanted < A.CFG.MAX_WANTED) { G.wanted = A.CFG.MAX_WANTED; G.quietTimer = 0; }
+      if (A.dist(p.x, p.y, step.cx, step.cy) < step.r) {
+        m.surviveT += dt;
+        if (m.surviveT >= step.secs) { A.advanceStep(); }
+      }
     }
   };
 
@@ -162,14 +141,13 @@
   };
 
   A.updateHostiles = function (dt) {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     for (var i = G.hostiles.length - 1; i >= 0; i--) {
       var h = G.hostiles[i];
       if (h.hp <= 0) { G.hostiles.splice(i, 1); continue; }
       var d = A.dist(h.x, h.y, p.x, p.y);
       h.angle = Math.atan2(p.y - h.y, p.x - h.x);
-      // Sidestep slowly so they are not standing targets.
+      // Sidestep slowly so they are never standing targets.
       h.strafe += dt;
       var sx = h.x + Math.cos(h.strafe) * 14 * dt;
       var sy = h.y + Math.sin(h.strafe) * 14 * dt;
@@ -199,7 +177,7 @@
     A.burst(h.x, h.y, '#e74c3c', 14, 170);
   };
 
-  // Job-board data for the M screen: name, pay, state.
+  // Job-board rows for the M screen: name, pay, and done/active/next/locked.
   A.jobList = function () {
     var G = A.G;
     return A.MISSIONS.map(function (def, i) {

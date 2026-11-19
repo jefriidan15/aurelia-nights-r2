@@ -1,16 +1,17 @@
 // Aurelia Nights — police.js
-// The five-star wanted system: cops spawn in proportion to heat, chase on
-// foot, ram the player's car, shoot at three stars and up, and arrest a
-// slow player who lets them get close.
+// The five-star wanted system. Heat decays after a quiet spell; the
+// street presence is two cops per star (ten at most). Cops chase on
+// foot, ram the player's car, open fire at three stars and up, and a
+// slow player who lets one stay close gets arrested. Killing a cop
+// only raises the heat further — there is no quiet way out of that.
 (function () {
   'use strict';
   var A = window.Aurelia = window.Aurelia || {};
 
   A.updatePolice = function (dt) {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
 
-    // Wanted decays after a quiet spell with no new crimes.
+    // Decay: twelve quiet seconds, then one star every eight seconds.
     if (G.wanted > 0) {
       G.quietTimer += dt;
       if (G.quietTimer > A.CFG.WANTED_DECAY_QUIET) {
@@ -23,21 +24,19 @@
       }
     }
 
-    // Keep the street presence matched to the wanted level: 2 cops a star.
     var want = Math.min(10, G.wanted * 2);
     while (G.cops.length < want) { A.spawnCop(); }
     while (G.cops.length > want) { G.cops.pop(); }
 
-    var arresting = false;
+    var closingIn = false;
     for (var i = G.cops.length - 1; i >= 0; i--) {
       var cop = G.cops[i];
       if (cop.hp <= 0) { G.cops.splice(i, 1); continue; }
       A.updateCop(cop, dt);
-      var d = A.dist(cop.x, cop.y, p.x, p.y);
-      if (!p.inCar && d < 26) { arresting = true; }
+      if (!p.inCar && A.dist(cop.x, cop.y, p.x, p.y) < 26) { closingIn = true; }
     }
 
-    if (arresting) {
+    if (closingIn) {
       G.arrestMeter += dt;
       if (G.arrestMeter > A.CFG.COP_ARREST_TIME) {
         G.arrestMeter = 0;
@@ -49,8 +48,7 @@
   };
 
   A.spawnCop = function () {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     var ang = A.randRange(0, Math.PI * 2);
     var r = A.randRange(480, 720);
     var x = A.clamp(p.x + Math.cos(ang) * r, 40, A.CFG.WORLD_W - 40);
@@ -67,17 +65,16 @@
   };
 
   A.updateCop = function (cop, dt) {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     var dx = p.x - cop.x, dy = p.y - cop.y;
     var d = Math.sqrt(dx * dx + dy * dy) || 1;
     cop.angle = Math.atan2(dy, dx);
 
     var car = A.playerCar();
     if (car) {
-      // Ram the player's car: touch it hard and it hurts.
       cop.ramTimer -= dt;
       if (d < 40 && cop.ramTimer <= 0) {
+        // Ram: damage the car and the driver, knock the car sideways.
         cop.ramTimer = 1.1;
         car.hp -= 4;
         A.damagePlayer(3, 'Ram by the law');
@@ -95,14 +92,13 @@
       }
     }
 
-    // Run the player down.
+    // Run the player down, sliding along walls like everyone else.
     var step = cop.speed * dt;
     var nx = cop.x + (dx / d) * step;
     var ny = cop.y + (dy / d) * step;
     if (A.walkable(nx, cop.y, 10)) { cop.x = nx; }
     if (A.walkable(cop.x, ny, 10)) { cop.y = ny; }
 
-    // At three stars and up, cops open fire from range.
     if (G.wanted >= 3 && d < 460 && d > 60) {
       cop.shootTimer -= dt;
       if (cop.shootTimer <= 0) {
@@ -113,8 +109,7 @@
   };
 
   A.copFire = function (cop) {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     var aim = Math.atan2(p.y - cop.y, p.x - cop.x) + A.randRange(-0.14, 0.14);
     G.bullets.push({
       x: cop.x + Math.cos(aim) * 20, y: cop.y + Math.sin(aim) * 20,

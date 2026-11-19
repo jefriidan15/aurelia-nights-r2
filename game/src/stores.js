@@ -1,7 +1,9 @@
 // Aurelia Nights — stores.js
-// The five shops. Each sells one or two things; the spray shop wipes heat
-// and repairs, the gun shop sells hardware, the diner and hospital heal,
-// and the safehouse saves the game.
+// The five shops. The spray shop wipes heat and repairs the car, the
+// gun shop sells hardware and ammo, the diner and the hospital heal,
+// and the safehouse saves the game and heals for free. Every offer
+// reports whether it can be bought right now, so the shop screen
+// never sells the player something useless.
 (function () {
   'use strict';
   var A = window.Aurelia = window.Aurelia || {};
@@ -21,71 +23,67 @@
     A.sfx('click');
   };
 
-  // What this shop offers right now: label, price, whether it can be bought.
+  // This shop's offers right now: label, price, and whether it is
+  // actually buyable given cash, health, heat and ownership.
   A.shopOffers = function (shop) {
-    var G = A.G;
-    var p = G.player;
-    var c = A.CFG;
-    var offers = [];
+    var G = A.G, p = G.player, c = A.CFG;
+    var car = A.playerCar();
+    var fullHp = p.hp >= p.maxHp;
     if (shop.kind === 'spray') {
-      offers.push({
+      return [{
         id: 'spray', label: 'Full respray + repair — wipe wanted, fix car',
         price: c.SPRAY_PRICE,
-        can: p.cash >= c.SPRAY_PRICE && (G.wanted > 0 || (A.playerCar() && A.playerCar().hp < c.CAR_HP)),
+        can: p.cash >= c.SPRAY_PRICE && (G.wanted > 0 || (car && car.hp < c.CAR_HP)),
         note: G.wanted === 0 ? 'No heat to wipe' : 'Wanted ' + G.wanted + ' stars'
-      });
-    } else if (shop.kind === 'gun') {
-      offers.push({
-        id: 'pistol', label: 'Pistol' + (p.weapons.pistol ? ' (owned)' : ''),
-        price: c.PISTOL_PRICE, can: p.cash >= c.PISTOL_PRICE && !p.weapons.pistol, note: ''
-      });
-      offers.push({
-        id: 'shotgun', label: 'Shotgun' + (p.weapons.shotgun ? ' (owned)' : ''),
-        price: c.SHOTGUN_PRICE, can: p.cash >= c.SHOTGUN_PRICE && !p.weapons.shotgun, note: ''
-      });
-      offers.push({
-        id: 'ammo', label: 'Ammo pack (+' + c.AMMO_PACK + ' for current weapon)',
-        price: c.AMMO_PRICE, can: p.cash >= c.AMMO_PRICE, note: ''
-      });
-    } else if (shop.kind === 'diner') {
-      offers.push({
-        id: 'meal', label: 'Gull special — heal +' + c.DINER_HEAL + ' HP',
-        price: c.DINER_PRICE, can: p.cash >= c.DINER_PRICE && p.hp < p.maxHp,
-        note: p.hp >= p.maxHp ? 'Already full health' : ''
-      });
-    } else if (shop.kind === 'hospital') {
-      offers.push({
-        id: 'treat', label: 'Full treatment — restore all HP',
-        price: c.HOSPITAL_PRICE, can: p.cash >= c.HOSPITAL_PRICE && p.hp < p.maxHp,
-        note: p.hp >= p.maxHp ? 'Already full health' : ''
-      });
-    } else if (shop.kind === 'safehouse') {
-      offers.push({
-        id: 'sleep', label: 'Sleep — save game + heal to full',
-        price: 0, can: true, note: 'Free'
-      });
+      }];
     }
-    return offers;
+    if (shop.kind === 'gun') {
+      return [
+        { id: 'pistol', label: 'Pistol' + (p.weapons.pistol ? ' (owned)' : ''),
+          price: c.PISTOL_PRICE, can: p.cash >= c.PISTOL_PRICE && !p.weapons.pistol, note: '' },
+        { id: 'shotgun', label: 'Shotgun' + (p.weapons.shotgun ? ' (owned)' : ''),
+          price: c.SHOTGUN_PRICE, can: p.cash >= c.SHOTGUN_PRICE && !p.weapons.shotgun, note: '' },
+        { id: 'ammo', label: 'Ammo pack (+' + c.AMMO_PACK + ' for current weapon)',
+          price: c.AMMO_PRICE, can: p.cash >= c.AMMO_PRICE, note: '' }
+      ];
+    }
+    if (shop.kind === 'diner') {
+      return [{
+        id: 'meal', label: 'Gull special — heal +' + c.DINER_HEAL + ' HP',
+        price: c.DINER_PRICE, can: p.cash >= c.DINER_PRICE && !fullHp,
+        note: fullHp ? 'Already full health' : ''
+      }];
+    }
+    if (shop.kind === 'hospital') {
+      return [{
+        id: 'treat', label: 'Full treatment — restore all HP',
+        price: c.HOSPITAL_PRICE, can: p.cash >= c.HOSPITAL_PRICE && !fullHp,
+        note: fullHp ? 'Already full health' : ''
+      }];
+    }
+    if (shop.kind === 'safehouse') {
+      return [{ id: 'sleep', label: 'Sleep — save game + heal to full', price: 0, can: true, note: 'Free' }];
+    }
+    return [];
   };
 
-  A.buyOffer = function (offerId) {
-    var G = A.G;
-    var shop = G.shop;
-    if (!shop) { return; }
-    var p = G.player;
-    var c = A.CFG;
-    var offers = A.shopOffers(shop);
-    var offer = null;
+  function findOffer(offers, id) {
     for (var i = 0; i < offers.length; i++) {
-      if (offers[i].id === offerId) { offer = offers[i]; }
+      if (offers[i].id === id) { return offers[i]; }
     }
+    return null;
+  }
+
+  A.buyOffer = function (offerId) {
+    var G = A.G, shop = G.shop;
+    if (!shop) { return; }
+    var p = G.player, c = A.CFG;
+    var offer = findOffer(A.shopOffers(shop), offerId);
     if (!offer || !offer.can) { A.sfx('click'); return; }
     p.cash -= offer.price;
+
     if (offerId === 'spray') {
-      G.wanted = 0;
-      G.quietTimer = 0;
-      G.decayTimer = 0;
-      G.cops = [];
+      G.wanted = 0; G.quietTimer = 0; G.decayTimer = 0; G.cops = [];
       A.repairCar(A.playerCar());
       A.flash('Fresh paint — heat gone, ride fixed', 2.5);
       A.sfx('heal');
@@ -115,8 +113,7 @@
       A.sfx('heal');
     } else if (offerId === 'sleep') {
       A.healPlayer(p.maxHp);
-      if (A.saveGame()) { A.flash('Saved. You wake up fresh.', 2.5); }
-      else { A.flash('Save failed — storage blocked', 2.5); }
+      A.flash(A.saveGame() ? 'Saved. You wake up fresh.' : 'Save failed — storage blocked', 2.5);
       A.sfx('heal');
     }
   };

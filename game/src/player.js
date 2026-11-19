@@ -1,62 +1,64 @@
 // Aurelia Nights — player.js
-// The on-foot player: walking, sprinting, stealing and exiting cars,
-// collecting street cash, taking damage and healing.
+// The on-foot player: walking and sprinting with wall sliding, facing
+// the mouse, picking up street cash, stealing cars with E, stepping out
+// again, and taking damage. Car driving itself lives in cars.js; the
+// wanted level lives here because stealing and killing are the crimes
+// that raise it.
 (function () {
   'use strict';
   var A = window.Aurelia = window.Aurelia || {};
 
   A.updatePlayer = function (dt) {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     if (p.inCar) { return; }
 
     var mv = A.moveVector();
-    var sprint = A.down('ShiftLeft') || A.down('ShiftRight');
-    var speed = sprint ? A.CFG.SPRINT_SPEED : A.CFG.WALK_SPEED;
+    var sprinting = A.down('ShiftLeft') || A.down('ShiftRight');
+    var speed = sprinting ? A.CFG.SPRINT_SPEED : A.CFG.WALK_SPEED;
     p.moving = (mv.x !== 0 || mv.y !== 0);
     p.speed = p.moving ? speed : 0;
 
+    // Move one axis at a time so the player slides along walls.
     var nx = p.x + mv.x * speed * dt;
     var ny = p.y + mv.y * speed * dt;
-    // Slide along walls: try each axis separately.
     if (A.walkable(nx, p.y, 12)) { p.x = nx; }
     if (A.walkable(p.x, ny, 12)) { p.y = ny; }
     p.x = A.clamp(p.x, 20, A.CFG.WORLD_W - 20);
     p.y = A.clamp(p.y, 20, A.CFG.WORLD_H - 20);
-
-    // Face the mouse while on foot.
     p.angle = A.aimAngle();
 
-    // Street cash.
-    for (var i = G.pickups.length - 1; i >= 0; i--) {
-      var pk = G.pickups[i];
-      if (A.dist(p.x, p.y, pk.x, pk.y) < 26) {
-        p.cash += pk.amount;
-        A.flash('+$' + pk.amount + ' street cash', 1.6);
-        A.sfx('pickup');
-        A.burst(pk.x, pk.y, '#2ecc71', 10, 120);
-        G.pickups.splice(i, 1);
-      }
-    }
+    collectCash(G, p);
 
-    // Context action: E near a car steals it, E near a shop opens it.
+    // E is context-sensitive: steal a nearby car, else open a nearby shop.
     if (A.hit('KeyE')) {
       var car = A.nearestCar(p.x, p.y, 58);
-      if (car) {
-        A.stealCar(car);
-      } else {
+      if (car) { A.stealCar(car); }
+      else {
         var shop = A.nearestShop(p.x, p.y, 78);
         if (shop) { A.openShop(shop); }
       }
     }
   };
 
+  function collectCash(G, p) {
+    for (var i = G.pickups.length - 1; i >= 0; i--) {
+      var pk = G.pickups[i];
+      if (A.dist(p.x, p.y, pk.x, pk.y) >= 26) { continue; }
+      p.cash += pk.amount;
+      A.flash('+$' + pk.amount + ' street cash', 1.6);
+      A.sfx('pickup');
+      A.burst(pk.x, pk.y, '#2ecc71', 10, 120);
+      G.pickups.splice(i, 1);
+    }
+  }
+
+  function allCars(G) { return G.cars.concat(G.parked); }
+
   A.nearestCar = function (x, y, maxD) {
-    var G = A.G;
     var best = null, bestD = maxD;
-    var all = G.cars.concat(G.parked);
-    for (var i = 0; i < all.length; i++) {
-      var c = all[i];
+    var cars = allCars(A.G);
+    for (var i = 0; i < cars.length; i++) {
+      var c = cars[i];
       if (c.driven) { continue; }
       var d = A.dist(x, y, c.x, c.y);
       if (d < bestD) { bestD = d; best = c; }
@@ -75,16 +77,13 @@
   };
 
   A.stealCar = function (car) {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     car.driven = true;
     car.traffic = false;
     car.parked = false;
     p.inCar = true;
     p.carId = car.id;
-    p.x = car.x;
-    p.y = car.y;
-    p.angle = car.angle;
+    p.x = car.x; p.y = car.y; p.angle = car.angle;
     G.stats.stolen += 1;
     A.raiseWanted(1, 'Grand theft auto');
     A.sfx('steal');
@@ -93,18 +92,18 @@
   };
 
   A.exitCar = function () {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     var car = A.playerCar();
     if (!car) { p.inCar = false; p.carId = -1; return; }
     car.driven = false;
     car.speed = 0;
-    // Step out to the side of the car.
-    var sx = car.x + Math.cos(car.angle + Math.PI / 2) * 34;
-    var sy = car.y + Math.sin(car.angle + Math.PI / 2) * 34;
+    // Step out sideways from the car; try the other side if blocked.
+    var side = car.angle + Math.PI / 2;
+    var sx = car.x + Math.cos(side) * 34;
+    var sy = car.y + Math.sin(side) * 34;
     if (!A.walkable(sx, sy, 12)) {
-      sx = car.x - Math.cos(car.angle + Math.PI / 2) * 34;
-      sy = car.y - Math.sin(car.angle + Math.PI / 2) * 34;
+      sx = car.x - Math.cos(side) * 34;
+      sy = car.y - Math.sin(side) * 34;
     }
     p.x = sx; p.y = sy;
     p.inCar = false;
@@ -116,16 +115,15 @@
   A.playerCar = function () {
     var G = A.G;
     if (!G.player.inCar) { return null; }
-    var all = G.cars.concat(G.parked);
-    for (var i = 0; i < all.length; i++) {
-      if (all[i].id === G.player.carId) { return all[i]; }
+    var cars = allCars(G);
+    for (var i = 0; i < cars.length; i++) {
+      if (cars[i].id === G.player.carId) { return cars[i]; }
     }
     return null;
   };
 
   A.damagePlayer = function (amount, cause) {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
     if (G.mode !== 'playing' || G.over) { return; }
     p.hp -= amount;
     A.sfx('hurt');

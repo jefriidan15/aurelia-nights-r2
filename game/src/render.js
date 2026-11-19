@@ -1,7 +1,9 @@
-// Aurelia Nights — render.js
-// Everything on the canvas: the city, the cars, the people, the HUD, the
-// minimap, and every screen (title, how-to, job board, shop, pause, end).
-// Buttons drawn here are registered in A.buttons for the loop to click.
+// Aurelia Nights — render.js (part 1: canvas helpers, world, entities)
+// Everything the player sees lives here: the city, the cars and people,
+// the night overlay, the HUD and minimap, and every screen (title,
+// how-to, job board, shop, pause, busted/wasted, win). Buttons drawn
+// here register in A.buttons so the loop can answer clicks on them.
+// All drawing is plain canvas 2D — no images, no fonts to load.
 (function () {
   'use strict';
   var A = window.Aurelia = window.Aurelia || {};
@@ -55,22 +57,22 @@
     else if (G.mode === 'win') { A.drawWin(ctx); }
   };
 
-  // ---- world -------------------------------------------------------------
+  // ---- the city ----------------------------------------------------------
   A.drawWorld = function (ctx) {
-    var G = A.G;
-    var cam = G.cam;
+    var G = A.G, cam = G.cam;
     ctx.save();
     ctx.translate(-cam.x + 640, -cam.y + 400);
 
-    // Districts.
-    for (var i = 0; i < A.DISTRICTS.length; i++) {
-      var d = A.DISTRICTS[i];
+    var i, d;
+    for (i = 0; i < A.DISTRICTS.length; i++) {
+      d = A.DISTRICTS[i];
       ctx.fillStyle = d.ground;
       ctx.fillRect(d.x, d.y, d.w, d.h);
-      text(ctx, d.name.toUpperCase(), d.x + d.w / 2, d.y + d.h / 2, 34, 'rgba(255,255,255,0.10)', 'center', true);
+      text(ctx, d.name.toUpperCase(), d.x + d.w / 2, d.y + d.h / 2, 34,
+        'rgba(255,255,255,0.10)', 'center', true);
     }
 
-    // Harbour water.
+    // Harbour water, with a few wave strokes.
     ctx.fillStyle = '#16324a';
     ctx.fillRect(0, A.CFG.HARBOUR_Y, A.CFG.WORLD_W, A.CFG.WORLD_H - A.CFG.HARBOUR_Y);
     ctx.strokeStyle = 'rgba(120,190,255,0.25)';
@@ -78,13 +80,10 @@
     for (var w = 0; w < 40; w++) {
       var wx = ((w * 173) % 3500) + 40;
       var wy = A.CFG.HARBOUR_Y + 60 + ((w * 97) % 800);
-      ctx.beginPath();
-      ctx.moveTo(wx, wy);
-      ctx.lineTo(wx + 46, wy);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx + 46, wy); ctx.stroke();
     }
 
-    // Pier.
+    // The pier deck.
     var pier = A.PIER;
     ctx.fillStyle = '#6b5a44';
     ctx.fillRect(pier.x, pier.y, pier.w, pier.h);
@@ -92,13 +91,16 @@
     for (var p = 0; p < 8; p++) { ctx.fillRect(pier.x, pier.y + 60 + p * 60, pier.w, 4); }
     text(ctx, 'PIER 9', pier.x + pier.w / 2, pier.y + pier.h - 24, 20, '#d8c9a3', 'center', true);
 
-    // Roads.
+    // Roads, then dashed centrelines.
     ctx.fillStyle = '#23262e';
-    A.AVENUES.forEach(function (x) { ctx.fillRect(x - A.CFG.ROAD_HALF, 0, A.CFG.ROAD_HALF * 2, A.CFG.HARBOUR_Y); });
-    A.STREETS.forEach(function (y) {
-      if (y < A.CFG.HARBOUR_Y) { ctx.fillRect(0, y - A.CFG.ROAD_HALF, A.CFG.WORLD_W, A.CFG.ROAD_HALF * 2); }
+    A.AVENUES.forEach(function (x) {
+      ctx.fillRect(x - A.CFG.ROAD_HALF, 0, A.CFG.ROAD_HALF * 2, A.CFG.HARBOUR_Y);
     });
-    // Centre dashes.
+    A.STREETS.forEach(function (y) {
+      if (y < A.CFG.HARBOUR_Y) {
+        ctx.fillRect(0, y - A.CFG.ROAD_HALF, A.CFG.WORLD_W, A.CFG.ROAD_HALF * 2);
+      }
+    });
     ctx.strokeStyle = 'rgba(240,200,60,0.55)';
     ctx.lineWidth = 3;
     ctx.setLineDash([26, 30]);
@@ -106,14 +108,16 @@
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, A.CFG.HARBOUR_Y); ctx.stroke();
     });
     A.STREETS.forEach(function (y) {
-      if (y < A.CFG.HARBOUR_Y) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(A.CFG.WORLD_W, y); ctx.stroke(); }
+      if (y < A.CFG.HARBOUR_Y) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(A.CFG.WORLD_W, y); ctx.stroke();
+      }
     });
     ctx.setLineDash([]);
 
-    // Buildings.
-    var W = G.world;
-    for (var b = 0; b < W.buildings.length; b++) {
-      var bd = W.buildings[b];
+    // Buildings, containers, lamps.
+    var W = G.world, b, bd;
+    for (b = 0; b < W.buildings.length; b++) {
+      bd = W.buildings[b];
       ctx.fillStyle = bd.color;
       ctx.fillRect(bd.x, bd.y, bd.w, bd.h);
       ctx.strokeStyle = 'rgba(0,0,0,0.35)';
@@ -123,7 +127,6 @@
         ctx.fillRect(bd.x + 8, bd.y + 8, bd.w - 16, bd.h - 16);
       }
     }
-    // Containers.
     for (var c = 0; c < W.containers.length; c++) {
       var cn = W.containers[c];
       ctx.fillStyle = cn.color;
@@ -131,13 +134,12 @@
       ctx.strokeStyle = 'rgba(0,0,0,0.4)';
       ctx.strokeRect(cn.x + 0.5, cn.y + 0.5, cn.w, cn.h);
     }
-    // Lamps.
     ctx.fillStyle = '#ffd76a';
     for (var l = 0; l < W.lamps.length; l++) {
       ctx.beginPath(); ctx.arc(W.lamps[l].x, W.lamps[l].y, 3, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Shops.
+    // Shop markers.
     for (var s = 0; s < A.SHOPS.length; s++) {
       var sh = A.SHOPS[s];
       ctx.fillStyle = sh.color;
@@ -148,10 +150,10 @@
       text(ctx, sh.name, sh.x, sh.y - 30, 13, '#ffffff', 'center', true);
     }
 
-    // Street cash.
+    // Street cash, bobbing gently.
     for (var k = 0; k < G.pickups.length; k++) {
       var pk = G.pickups[k];
-      var bob = Math.sin((G.elapsed * 2 + pk.bob)) * 2;
+      var bob = Math.sin(G.elapsed * 2 + pk.bob) * 2;
       ctx.fillStyle = '#2ecc71';
       ctx.beginPath(); ctx.arc(pk.x, pk.y + bob, 9, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#0b3d1e';
@@ -160,7 +162,7 @@
       text(ctx, '$', pk.x, pk.y + bob, 12, '#062b14', 'center', true);
     }
 
-    // Mission marker.
+    // Pulsing gold ring on the current mission destination.
     var step = A.currentStep();
     if (step && step.x !== undefined && G.mode === 'playing') {
       var pulse = 1 + Math.sin(G.elapsed * 5) * 0.15;
@@ -176,7 +178,7 @@
     ctx.restore();
   };
 
-  // ---- entities ----------------------------------------------------------
+  // ---- cars, people, bullets, particles ----------------------------------
   function drawCarShape(ctx, car) {
     ctx.save();
     ctx.translate(car.x, car.y);
@@ -193,6 +195,13 @@
     ctx.restore();
   }
 
+  function hpBar(ctx, x, y, w, frac) {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(x, y, w, 4);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(x, y, w * frac, 4);
+  }
+
   A.drawEntities = function (ctx) {
     var G = A.G;
     ctx.save();
@@ -201,7 +210,6 @@
     var all = G.cars.concat(G.parked);
     for (var i = 0; i < all.length; i++) { drawCarShape(ctx, all[i]); }
 
-    // Pedestrians.
     for (var j = 0; j < G.peds.length; j++) {
       var pd = G.peds[j];
       if (pd.hp <= 0) { continue; }
@@ -210,12 +218,9 @@
       ctx.strokeStyle = 'rgba(0,0,0,0.5)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      if (pd.panic > 0) {
-        text(ctx, '!', pd.x, pd.y - 16, 16, '#ff4757', 'center', true);
-      }
+      if (pd.panic > 0) { text(ctx, '!', pd.x, pd.y - 16, 16, '#ff4757', 'center', true); }
     }
 
-    // Cops.
     for (var k = 0; k < G.cops.length; k++) {
       var cop = G.cops[k];
       ctx.fillStyle = '#1e5fd6';
@@ -225,14 +230,9 @@
       ctx.stroke();
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(cop.x - 6, cop.y - 2, 12, 4);
-      // HP bar.
-      ctx.fillStyle = '#111';
-      ctx.fillRect(cop.x - 12, cop.y - 20, 24, 4);
-      ctx.fillStyle = '#e74c3c';
-      ctx.fillRect(cop.x - 12, cop.y - 20, 24 * (cop.hp / A.CFG.COP_HP), 4);
+      hpBar(ctx, cop.x - 12, cop.y - 20, 24, cop.hp / A.CFG.COP_HP);
     }
 
-    // Hostiles.
     for (var h = 0; h < G.hostiles.length; h++) {
       var hs = G.hostiles[h];
       ctx.fillStyle = '#8e1616';
@@ -240,13 +240,10 @@
       ctx.strokeStyle = '#ff6b6b';
       ctx.lineWidth = 2;
       ctx.stroke();
-      ctx.fillStyle = '#111';
-      ctx.fillRect(hs.x - 13, hs.y - 22, 26, 4);
-      ctx.fillStyle = '#e74c3c';
-      ctx.fillRect(hs.x - 13, hs.y - 22, 26 * (hs.hp / 60), 4);
+      hpBar(ctx, hs.x - 13, hs.y - 22, 26, hs.hp / 60);
     }
 
-    // Player.
+    // The player, on foot only — inside a car the car shape is the player.
     var p = G.player;
     if (!p.inCar) {
       ctx.save();
@@ -262,7 +259,6 @@
       ctx.restore();
     }
 
-    // Bullets.
     ctx.strokeStyle = '#ffe14d';
     ctx.lineWidth = 3;
     for (var b = 0; b < G.bullets.length; b++) {
@@ -273,7 +269,6 @@
       ctx.stroke();
     }
 
-    // Particles.
     for (var q = 0; q < G.parts.length; q++) {
       var pt = G.parts[q];
       ctx.globalAlpha = Math.max(0, pt.life * 1.6);
@@ -284,7 +279,9 @@
     ctx.restore();
   };
 
-  // ---- night ---------------------------------------------------------------
+// Aurelia Nights — render.js (part 2: night, HUD, minimap, screens)
+
+  // ---- night -------------------------------------------------------------
   A.isNight = function () {
     var t = A.G.time;
     return t >= A.CFG.NIGHT_START || t < A.CFG.NIGHT_END;
@@ -295,7 +292,7 @@
     if (!A.isNight()) { return; }
     ctx.fillStyle = 'rgba(4,8,28,0.5)';
     ctx.fillRect(0, 0, 1280, 800);
-    // Headlights when driving at night.
+    // Headlight cone ahead of the player's car.
     var p = G.player;
     if (p.inCar) {
       var car = A.playerCar();
@@ -305,7 +302,6 @@
         ctx.save();
         ctx.translate(sx, sy);
         ctx.rotate(car.angle);
-        // Gradient in car-local space so the cone points where the car points.
         var grad = ctx.createRadialGradient(0, 0, 10, 0, 0, 340);
         grad.addColorStop(0, 'rgba(255,230,150,0.34)');
         grad.addColorStop(1, 'rgba(255,230,150,0)');
@@ -319,7 +315,7 @@
         ctx.restore();
       }
     }
-    // Lamp glow.
+    // Soft glow around every street lamp.
     ctx.fillStyle = 'rgba(255,215,106,0.10)';
     var W = G.world;
     for (var i = 0; i < W.lamps.length; i++) {
@@ -333,8 +329,7 @@
 
   // ---- HUD -----------------------------------------------------------------
   A.drawHUD = function (ctx) {
-    var G = A.G;
-    var p = G.player;
+    var G = A.G, p = G.player;
 
     panel(ctx, 12, 12, 250, 108);
     text(ctx, '$' + p.cash, 26, 34, 24, '#2ecc71', 'left', true);
@@ -346,45 +341,41 @@
     var stars = '';
     for (var s = 0; s < 5; s++) { stars += s < G.wanted ? '\u2605' : '\u2606'; }
     text(ctx, stars, 26, 90, 20, '#ffd700', 'left', true);
-    var ammoTxt = p.weapons[p.weapon] ? (p.weapon.toUpperCase() + '  ' + p.ammo[p.weapon] + ' rds') : 'UNARMED';
+    var ammoTxt = p.weapons[p.weapon]
+      ? (p.weapon.toUpperCase() + '  ' + p.ammo[p.weapon] + ' rds') : 'UNARMED';
     text(ctx, ammoTxt, 26, 110, 13, '#f5d76e', 'left', true);
 
-    // Objective.
+    // Current objective, centred across the top.
     var obj = A.objectiveText();
-    var w = ctx.measureText(obj).width;
     panel(ctx, 640 - 330, 12, 660, 30);
     text(ctx, obj, 640, 28, 14, '#ffe14d', 'center', true);
 
-    // Clock + day.
+    // Clock, day counter and district, top right.
     var hours = Math.floor(G.time * 24);
     var mins = Math.floor((G.time * 24 - hours) * 60);
     var clock = (hours < 10 ? '0' : '') + hours + ':' + (mins < 10 ? '0' : '') + mins;
-    text(ctx, (A.isNight() ? 'NIGHT' : 'DAY') + ' ' + clock + '  ·  Day ' + G.dayCount, 1268, 28, 14, '#ffffff', 'right', true);
-
-    // District.
+    text(ctx, (A.isNight() ? 'NIGHT' : 'DAY') + ' ' + clock + '  ·  Day ' + G.dayCount,
+      1268, 28, 14, '#ffffff', 'right', true);
     text(ctx, A.districtAt(p.x, p.y), 1268, 52, 14, '#9fb4d8', 'right', true);
 
-    // Arrest meter.
     if (G.arrestMeter > 0) {
       panel(ctx, 490, 60, 300, 26);
-      text(ctx, 'ARRESTED IN ' + Math.max(0, (A.CFG.COP_ARREST_TIME - G.arrestMeter)).toFixed(1) + 's — RUN', 640, 74, 15, '#ff4757', 'center', true);
+      text(ctx, 'ARRESTED IN ' + Math.max(0, (A.CFG.COP_ARREST_TIME - G.arrestMeter)).toFixed(1) + 's — RUN',
+        640, 74, 15, '#ff4757', 'center', true);
     }
 
-    // Banner.
     if (G.bannerTimer > 0) {
       ctx.globalAlpha = Math.min(1, G.bannerTimer);
       text(ctx, G.banner, 640, 120, 26, '#ffd700', 'center', true);
       ctx.globalAlpha = 1;
     }
 
-    // Toast.
     if (G.msgTimer > 0) {
       ctx.globalAlpha = Math.min(1, G.msgTimer);
       text(ctx, G.msg, 640, 760, 16, '#ffffff', 'center', true);
       ctx.globalAlpha = 1;
     }
 
-    // Context prompt.
     if (G.mode === 'playing' && !p.inCar) {
       var car = A.nearestCar(p.x, p.y, 58);
       var shop = car ? null : A.nearestShop(p.x, p.y, 78);
@@ -435,14 +426,13 @@
 
   // ---- screens ---------------------------------------------------------------
   A.drawTitle = function (ctx) {
-    var G = A.G;
     var grad = ctx.createLinearGradient(0, 0, 0, 800);
     grad.addColorStop(0, '#0d1526');
     grad.addColorStop(0.6, '#1a2340');
     grad.addColorStop(1, '#3a1f3d');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 1280, 800);
-    // Skyline.
+    // Night skyline silhouettes with lit windows.
     ctx.fillStyle = '#0a0f1e';
     for (var i = 0; i < 26; i++) {
       var bx = i * 52;
@@ -450,7 +440,9 @@
       ctx.fillRect(bx, 560 - bh, 44, bh);
       ctx.fillStyle = 'rgba(255,215,106,0.5)';
       for (var wnd = 0; wnd < 6; wnd++) {
-        if ((i * 7 + wnd * 3) % 4 === 0) { ctx.fillRect(bx + 6 + (wnd % 3) * 14, 560 - bh + 14 + Math.floor(wnd / 3) * 22, 6, 8); }
+        if ((i * 7 + wnd * 3) % 4 === 0) {
+          ctx.fillRect(bx + 6 + (wnd % 3) * 14, 560 - bh + 14 + Math.floor(wnd / 3) * 22, 6, 8);
+        }
       }
       ctx.fillStyle = '#0a0f1e';
     }
@@ -466,6 +458,7 @@
     A.uiButton(ctx, 490, 508, 300, 52, 'HOW TO PLAY', 'howto');
     text(ctx, 'make.fun bounty gta6-01  ·  best played loud', 640, 620, 13, '#7c8aa0', 'center');
     text(ctx, 'M — jobs   P — pause   F1 — mute', 640, 650, 13, '#7c8aa0', 'center');
+    if (A.G.mode === 'howto') { A.drawHowTo(ctx); }
   };
 
   A.drawHowTo = function (ctx) {
@@ -505,7 +498,8 @@
       var tag = j.state === 'done' ? 'DONE' : (j.state === 'active' ? 'ACTIVE' : (j.state === 'next' ? 'NEXT' : 'LOCKED'));
       text(ctx, (i + 1) + '. ' + j.name, 336, y + 18, 17, '#ffffff', 'left', true);
       text(ctx, j.blurb, 336, y + 42, 13, '#9fb4d8', 'left');
-      text(ctx, '$' + j.pay + '  ·  ' + tag, 944, y + 18, 15, j.state === 'done' ? '#2ecc71' : '#ffd700', 'right', true);
+      text(ctx, '$' + j.pay + '  ·  ' + tag, 944, y + 18, 15,
+        j.state === 'done' ? '#2ecc71' : '#ffd700', 'right', true);
     }
     text(ctx, A.objectiveText(), 640, 600, 15, '#ffe14d', 'center');
     A.uiButton(ctx, 540, 626, 200, 40, 'CLOSE  [M]', 'close-jobs');
@@ -529,11 +523,7 @@
       ctx.fillRect(370, y, 540, 62);
       text(ctx, o.label, 386, y + 20, 15, '#ffffff', 'left', true);
       if (o.note) { text(ctx, o.note, 386, y + 44, 12, '#9fb4d8', 'left'); }
-      if (o.price > 0) {
-        A.uiButton(ctx, 800, y + 12, 96, 38, '$' + o.price, 'buy:' + o.id, o.can);
-      } else {
-        A.uiButton(ctx, 800, y + 12, 96, 38, 'FREE', 'buy:' + o.id, o.can);
-      }
+      A.uiButton(ctx, 800, y + 12, 96, 38, o.price > 0 ? '$' + o.price : 'FREE', 'buy:' + o.id, o.can);
     }
     A.uiButton(ctx, 540, 540, 200, 44, 'LEAVE  [E]', 'close-shop');
   };
@@ -550,11 +540,14 @@
 
   A.drawOver = function (ctx) {
     var G = A.G;
-    ctx.fillStyle = G.mode === 'busted' ? 'rgba(10,20,60,0.78)' : 'rgba(50,8,8,0.78)';
+    var busted = G.mode === 'busted';
+    ctx.fillStyle = busted ? 'rgba(10,20,60,0.78)' : 'rgba(50,8,8,0.78)';
     ctx.fillRect(0, 0, 1280, 800);
-    text(ctx, G.mode === 'busted' ? 'BUSTED' : 'WASTED', 640, 300, 64, G.mode === 'busted' ? '#5aa2ff' : '#ff4757', 'center', true);
+    text(ctx, busted ? 'BUSTED' : 'WASTED', 640, 300, 64,
+      busted ? '#5aa2ff' : '#ff4757', 'center', true);
     text(ctx, G.overText || '', 640, 370, 20, '#ffffff', 'center');
-    text(ctx, 'Cash: $' + G.player.cash + '   ·   Jobs done: ' + G.missionIdx + '/6   ·   Kills: ' + G.stats.kills, 640, 410, 16, '#9fb4d8', 'center');
+    text(ctx, 'Cash: $' + G.player.cash + '   ·   Jobs done: ' + G.missionIdx + '/6   ·   Kills: ' + G.stats.kills,
+      640, 410, 16, '#9fb4d8', 'center');
     A.uiButton(ctx, 490, 460, 300, 52, 'BACK TO TITLE', 'back-title');
     text(ctx, 'or press Enter', 640, 540, 13, '#7c8aa0', 'center');
   };
@@ -568,7 +561,8 @@
     ctx.fillRect(0, 0, 1280, 800);
     text(ctx, 'PORT AURELIA IS YOURS', 640, 260, 48, '#ffd700', 'center', true);
     text(ctx, 'All six jobs complete. The city never stood a chance.', 640, 320, 20, '#e8ecf4', 'center');
-    text(ctx, 'Total earned: $' + G.stats.earned + '   ·   Cars stolen: ' + G.stats.stolen + '   ·   Kills: ' + G.stats.kills, 640, 370, 17, '#9fb4d8', 'center');
+    text(ctx, 'Total earned: $' + G.stats.earned + '   ·   Cars stolen: ' + G.stats.stolen + '   ·   Kills: ' + G.stats.kills,
+      640, 370, 17, '#9fb4d8', 'center');
     A.uiButton(ctx, 490, 430, 300, 52, 'PLAY AGAIN', 'restart');
     text(ctx, 'or press Enter', 640, 510, 13, '#7c8aa0', 'center');
   };
